@@ -21,6 +21,9 @@ import org.apache.spark.ml.{Estimator, Model}
 import org.apache.spark.ml.param.ParamMap
 import org.apache.spark.sql.DataFrame
 
+/**
+ * Partial estimator performs a single iterative step in each fitting.
+ */
 abstract class PartialEstimator[M <: Model[M]]
   extends Estimator[M] with HasDownSamplingFactor with HasStepsPerPulling {
 

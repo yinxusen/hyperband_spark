@@ -17,7 +17,6 @@
 
 package org.apache.spark.ml.tuning.bandit
 
-import com.github.fommil.netlib.F2jBLAS
 import org.apache.spark.Logging
 import org.apache.spark.annotation.Experimental
 import org.apache.spark.ml.{Estimator, Model}
@@ -33,47 +32,106 @@ import org.apache.spark.sql.{DataFrame, SQLContext}
  */
 trait BanditValidatorParams extends Params with HasStepsPerPulling with HasSeed {
 
+  /**
+   *  Parameter to define problem type.
+   *
+   *  @group param
+   */
   val problemType: Param[String] = new Param(this, "problemType", "types of problems")
   setDefault(problemType, "CLASSIFY")
 
+  /** @group getParam */
   def getProblemType: String = $(problemType)
 
+  /**
+   * Specify whether to keep compute history or not.
+   *
+   * @group param
+   */
   val computeHistory: BooleanParam = new BooleanParam(this, "computeHistory",
     "whether to compute history or not")
   setDefault(computeHistory, true)
 
+  /** @group getParam */
   def getComputeHistory: Boolean = $(computeHistory)
 
+  /**
+   * Baselines for each dataset.
+   *
+   * @group param
+   */
   val baselines: Param[Map[String, Double]] = new Param(this, "baselines",
     "baseline of each dataset")
 
+  /** @group getParam */
   def getBaselines: Map[String, Double] = $(baselines)
 
+  /**
+   * Parameters to specify an array of model families.
+   *
+   * @group param
+   */
   val modelFamilies: Param[Array[ModelFamily]] = new Param(this, "modelFamilies", "model families")
 
+  /** @group getParam */
   def getModelFamilies: Array[ModelFamily] = $(modelFamilies)
 
+  /**
+   * Number of trails to conduct the experiment.
+   *
+   * @group param
+   */
   val numTrails: IntParam = new IntParam(this, "numTrails", "number of trails")
 
+  /** @group getParam */
   def getNumTrails: Int = $(numTrails)
 
+  /**
+   * The data name and file name of each dataset.
+   *
+   * @group param
+   */
   val datasets: Param[Map[String, String]] = new Param(this, "datasets", "datasets to use")
 
+  /** @group getParam */
   def getDatasets: Map[String, String] = $(datasets)
 
+  /**
+   * A list of numbers of arms per parameter.
+   *
+   * @group param
+   */
   val numArmsList: Param[Array[Int]] = new Param(this, "numArmsList",
     "a list of numbers of arms per parameter")
 
+  /** @group getParam */
   def getNumArmsList: Array[Int] = $(numArmsList)
 
+  /**
+   * A list of expected iterations for each arm.
+   *
+   * @group param
+   */
   val expectedIters: Param[Array[Int]] = new Param(this, "expectedIters", "expected iterations")
 
+  /** @group getParam */
   def getExpectedIters: Array[Int] = $(expectedIters)
 
+  /**
+   * An array of search strategies to use.
+   *
+   * @group param
+   */
   val searchStrategies: Param[Array[SearchStrategy]] = new Param(this, "searchStrategies", "")
 
+  /** @group getParam */
   def getSearchStrategies: Array[SearchStrategy] = $(searchStrategies)
 
+  /**
+   * The evaluator to evaluate errors of each arm.
+   *
+   * @group param
+   */
   val evaluator: Param[Evaluator] = new Param(this, "evaluator",
     "evaluator used to select hyper-parameters that maximize the cross-validated metric")
 
@@ -91,38 +149,51 @@ class BanditValidator(override val uid: String)
 
   def this() = this(Identifiable.randomUID("bandit validation"))
 
+  // TODO
   def transformSchema(schema: StructType): StructType = {
     schema
   }
 
+  // TODO
   def copy(extra: ParamMap): BanditValidator = ???
 
-  private val f2jBLAS = new F2jBLAS
-
+  /** @group setParam */
   def setProblemType(value: String): this.type = set(problemType, value)
 
+  /** @group setParam */
   def setComputeHistory(value: Boolean): this.type = set(computeHistory, value)
 
+  /** @group setParam */
   def setBaselines(value: Map[String, Double]): this.type = set(baselines, value)
 
+  /** @group setParam */
   def setModelFamilies(value: Array[ModelFamily]): this.type = set(modelFamilies, value)
 
+  /** @group setParam */
   def setNumTrails(value: Int): this.type = set(numTrails, value)
 
+  /** @group setParam */
   def setDatasets(value: Map[String, String]): this.type = set(datasets, value)
 
+  /** @group setParam */
   def setNumArmsList(value: Array[Int]): this.type = set(numArmsList, value)
 
+  /** @group setParam */
   def setExpectedIters(value: Array[Int]): this.type = set(expectedIters, value)
 
+  /** @group setParam */
   def setSearchStrategies(value: Array[SearchStrategy]): this.type = set(searchStrategies, value)
 
+  /** @group setParam */
   def setEvaluator(value: Evaluator): this.type = set(evaluator, value)
 
+  /** @group setParam */
   def setStepsPerPulling(value: Int): this.type = set(stepsPerPulling, value)
 
+  /** @group setParam */
   def setSeed(value: Long): this.type = set(seed, value)
 
+  // TODO
   override def fit(dataset: DataFrame): BanditValidatorModel = ???
 
   def fit(sqlCtx: SQLContext) = {

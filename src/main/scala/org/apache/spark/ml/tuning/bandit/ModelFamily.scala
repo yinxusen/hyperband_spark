@@ -31,16 +31,16 @@ abstract class ModelFamily(val name: String, val paramList: Array[ParamSampler[_
    * Create an arm given initial dataset, parameters. The model family provides the
    * [PartialEstimator] plus with necessary settings.
    */
-  def createArm(initData: Dataset, params: ParamMap): Arm[_]
+  def createArm(initData: Dataset, params: ParamMap): Arms.ArmExistential
 
-  def addArm(hp: ParamMap, arms: mutable.Map[(String, String), Arm[_]], arm: Arm[_]): Unit = {
+  def addArm(hp: ParamMap, arms: mutable.Map[(String, String), Arms.ArmExistential], arm: Arms.ArmExistential): Unit = {
     arms += (this.name, hp.toString) -> arm
   }
 
   def createArms(
       hpPoints: Array[ParamMap],
       initData: Dataset,
-      arms: mutable.Map[(String, String), Arm[_]]): mutable.Map[(String, String), Arm[_]] = {
+      arms: mutable.Map[(String, String), Arms.ArmExistential]): mutable.Map[(String, String), Arms.ArmExistential] = {
     for (hp <- hpPoints) {
       this.addArm(hp, arms, this.createArm(initData, hp))
     }
@@ -64,7 +64,7 @@ class LinearRidgeRegressionModelFamily(
    * Note that the names of feature column, label column, prediction column in
    * [LinearRidgeRegression], [LinearRidgeRegressionModel], and [Evaluator] should be the same.
    */
-  override def createArm(initData: Dataset, params: ParamMap): Arm[_] = {
+  override def createArm(initData: Dataset, params: ParamMap): Arm[LinearRidgeRegressionModel] = {
     val linearRidgeRegression= new LinearRidgeRegression()
       .setDownSamplingFactor(0.1).setStepsPerPulling(1).copy(params)
 

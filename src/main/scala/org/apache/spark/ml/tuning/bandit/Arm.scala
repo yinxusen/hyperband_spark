@@ -152,6 +152,8 @@ class Arm[M <: Model[M]](
 
 object Arms {
 
+  type ArmExistential = Arm[M] forSome {type M <: Model[M]}
+
   /**
    * Generate arms given an array of [ModelFamily].
    *
@@ -161,8 +163,8 @@ object Arms {
   def generateArms(
       modelFamilies: Array[ModelFamily],
       data: Dataset,
-      numArmsPerParameter: Int): Map[(String, String), Arm[_]] = {
-    val arms = new mutable.HashMap[(String, String), Arm[_]]()
+      numArmsPerParameter: Int): Map[(String, String), Arms.ArmExistential] = {
+    val arms = new mutable.HashMap[(String, String), Arms.ArmExistential]()
     for (modelFamily <- modelFamilies) {
       val numParamsToTune = modelFamily.paramList.size
       val numArmsForModelFamily = numParamsToTune * numArmsPerParameter
@@ -188,15 +190,15 @@ object Arms {
 /**
  * Allocate an array of pre-generated arms for a [SearchStrategy].
  */
-class ArmsAllocator(val allArms: Map[(String, String), Arm[_]]) {
+class ArmsAllocator(val allArms: Map[(String, String), Arms.ArmExistential]) {
   val usedArms = new ArrayBuffer[(String, String)]()
   val unusedArms = new ArrayBuffer[(String, String)]()
   unusedArms.appendAll(allArms.keys)
-  val arms = new mutable.HashMap[(String, String), Arm[_]]()
+  val arms = new mutable.HashMap[(String, String), Arms.ArmExistential]()
 
-  def allocate(numArms: Int): Map[(String, String), Arm[_]] = {
+  def allocate(numArms: Int): Map[(String, String), Arms.ArmExistential] = {
     assert(numArms <= allArms.size, "Required arms exceed the total amount.")
-    val arms = new mutable.HashMap[(String, String), Arm[_]]()
+    val arms = new mutable.HashMap[(String, String), Arms.ArmExistential]()
     var i = 0
     while (i < math.min(numArms, usedArms.size)) {
       arms += usedArms(i) -> allArms(usedArms(i))

@@ -31,30 +31,48 @@ import org.apache.spark.sql.{DataFrame, SQLContext}
 /**
  * Params for [[BanditValidator]] and [[BanditValidatorModel]].
  */
-private[ml] trait BanditValidatorParams extends Params with HasStepsPerPulling with HasSeed {
+trait BanditValidatorParams extends Params with HasStepsPerPulling with HasSeed {
 
   val problemType: Param[String] = new Param(this, "problemType", "types of problems")
   setDefault(problemType, "CLASSIFY")
 
   def getProblemType: String = $(problemType)
 
-  val computeHistory: BooleanParam = new BooleanParam(this, "computeHistory", "whether to compute history or not")
-
+  val computeHistory: BooleanParam = new BooleanParam(this, "computeHistory",
+    "whether to compute history or not")
   setDefault(computeHistory, true)
 
-  val baselines: Param[Map[String, Double]] = new Param(this, "baselines", "baseline of each dataset")
+  def getComputeHistory: Boolean = $(computeHistory)
+
+  val baselines: Param[Map[String, Double]] = new Param(this, "baselines",
+    "baseline of each dataset")
+
+  def getBaselines: Map[String, Double] = $(baselines)
 
   val modelFamilies: Param[Array[ModelFamily]] = new Param(this, "modelFamilies", "model families")
 
+  def getModelFamilies: Array[ModelFamily] = $(modelFamilies)
+
   val numTrails: IntParam = new IntParam(this, "numTrails", "number of trails")
+
+  def getNumTrails: Int = $(numTrails)
 
   val datasets: Param[Map[String, String]] = new Param(this, "datasets", "datasets to use")
 
-  val numArmsList: Param[Array[Int]] = new Param(this, "numArmsList", "a list of numbers of arms per parameter")
+  def getDatasets: Map[String, String] = $(datasets)
+
+  val numArmsList: Param[Array[Int]] = new Param(this, "numArmsList",
+    "a list of numbers of arms per parameter")
+
+  def getNumArmsList: Array[Int] = $(numArmsList)
 
   val expectedIters: Param[Array[Int]] = new Param(this, "expectedIters", "expected iterations")
 
+  def getExpectedIters: Array[Int] = $(expectedIters)
+
   val searchStrategies: Param[Array[SearchStrategy]] = new Param(this, "searchStrategies", "")
+
+  def getSearchStrategies: Array[SearchStrategy] = $(searchStrategies)
 
   val evaluator: Param[Evaluator] = new Param(this, "evaluator",
     "evaluator used to select hyper-parameters that maximize the cross-validated metric")
@@ -68,8 +86,8 @@ private[ml] trait BanditValidatorParams extends Params with HasStepsPerPulling w
  * K-fold cross validation.
  */
 @Experimental
-class BanditValidator(override val uid: String) extends Estimator[BanditValidatorModel]
-with BanditValidatorParams with Logging {
+class BanditValidator(override val uid: String)
+  extends Estimator[BanditValidatorModel] with BanditValidatorParams with Logging {
 
   def this() = this(Identifiable.randomUID("bandit validation"))
 
@@ -81,10 +99,29 @@ with BanditValidatorParams with Logging {
 
   private val f2jBLAS = new F2jBLAS
 
+  def setProblemType(value: String): this.type = set(problemType, value)
+
   def setComputeHistory(value: Boolean): this.type = set(computeHistory, value)
 
-  /** @group setParam */
+  def setBaselines(value: Map[String, Double]): this.type = set(baselines, value)
+
+  def setModelFamilies(value: Array[ModelFamily]): this.type = set(modelFamilies, value)
+
+  def setNumTrails(value: Int): this.type = set(numTrails, value)
+
+  def setDatasets(value: Map[String, String]): this.type = set(datasets, value)
+
+  def setNumArmsList(value: Array[Int]): this.type = set(numArmsList, value)
+
+  def setExpectedIters(value: Array[Int]): this.type = set(expectedIters, value)
+
+  def setSearchStrategies(value: Array[SearchStrategy]): this.type = set(searchStrategies, value)
+
   def setEvaluator(value: Evaluator): this.type = set(evaluator, value)
+
+  def setStepsPerPulling(value: Int): this.type = set(stepsPerPulling, value)
+
+  def setSeed(value: Long): this.type = set(seed, value)
 
   override def fit(dataset: DataFrame): BanditValidatorModel = ???
 
@@ -109,16 +146,20 @@ with BanditValidatorParams with Logging {
       }
 
       $(numArmsList).flatMap { case numArmsPerParameter =>
-        val numArms = $(modelFamilies).map(modelFamily => math.pow(numArmsPerParameter, modelFamily.paramList.size)).sum.toInt
+        val numArms = $(modelFamilies)
+          .map(modelFamily => math.pow(numArmsPerParameter, modelFamily.paramList.size)).sum.toInt
         $(expectedIters).zipWithIndex.flatMap { case (expectedNumItersPerArm, idx) =>
           $(searchStrategies).map { case searchStrategy =>
             val arms = armsAllocator.allocate(numArms)
-            val bestArm = searchStrategy.search($(modelFamilies), expectedNumItersPerArm * numArms, arms)
-            ((searchStrategy.name, dataName, numArms, expectedNumItersPerArm), bestArm.getResults(false, None))
+            val bestArm = searchStrategy
+              .search($(modelFamilies), expectedNumItersPerArm * numArms, arms)
+            ((searchStrategy.name, dataName, numArms, expectedNumItersPerArm),
+              bestArm.getResults(false, None))
           }
         }
       }
     }
+    results
   }
 }
 

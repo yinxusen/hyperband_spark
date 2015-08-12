@@ -37,6 +37,6 @@ class LinRegressionModelFamily(
     val evaluator = new RegressionEvaluator()
       .setMetricName("rmse")
     new Arm[LinearRidgeRegressionModel](
-      initData, None, 0, 0, "linear ridge regression", linearRidgeRegression, evaluator)
+      initData, "linear ridge regression", linearRidgeRegression, evaluator)
   }
 }

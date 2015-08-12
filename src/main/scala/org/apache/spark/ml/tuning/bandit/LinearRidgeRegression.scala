@@ -62,6 +62,12 @@ class LinearRidgeRegression(override val uid: String)
   /** @group setParam */
   def setStep(value: Int): this.type = set(step, value)
 
+  /** @group setParam */
+  def setStepsPerPulling(value: Int): this.type  = set(stepsPerPulling, value)
+
+  /** @group setParam */
+  def setDownSamplingFactor(value: Double): this.type = set(downSamplingFactor, value)
+
   override def transformSchema(schema: StructType): StructType = {
     validateAndTransformSchema(schema)
   }

@@ -1,3 +1,20 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.spark.ml.tuning.bandit
 
 import org.apache.spark.ml.param.shared.{HasInputCol, HasOutputCol}
@@ -11,17 +28,18 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{DataFrame, Row}
 import org.apache.spark.sql.types.StructType
 
-/**
- * Created by panda on 8/10/15.
- */
-
-trait LinearRidgeRegressionBase
+trait LinearRidgeRegressionParam
   extends Params with HasInputCol with HasOutputCol with HasStepControl {
 
+  /**
+   * Regularization parameter for linear ridge regression.
+   *
+   * @group param
+   */
   val regularizer: DoubleParam = new DoubleParam(this, "regularizer", "regularization parameter")
-
   setDefault(regularizer -> 0.1)
 
+  /** @group getParam */
   def getRegularizer: Double = $(regularizer)
 
   /**
@@ -34,17 +52,25 @@ trait LinearRidgeRegressionBase
 }
 
 class LinearRidgeRegression(override val uid: String)
-  extends PartialEstimator[LinearRidgeRegressionModel] with LinearRidgeRegressionBase {
+  extends PartialEstimator[LinearRidgeRegressionModel] with LinearRidgeRegressionParam {
 
   def this() = this(Identifiable.randomUID("linear ridge regression"))
 
+  /** @group setParam */
   def setRegularizer(value: Double): this.type = set(regularizer, value)
 
+  /** @group setParam */
   def setStep(value: Int): this.type = set(step, value)
 
   override def transformSchema(schema: StructType): StructType = {
     validateAndTransformSchema(schema)
   }
+
+  /**
+   * Fit the [LinearRidgeRegressionModel] in a single SGD step without an initial model. In this
+   * condition, the code will generate a initial model itself and usually, it will be a all-zero
+   * model.
+   */
   override def fit(dataset: DataFrame): LinearRidgeRegressionModel = {
     val currentStep = $(step) + 1
     this.setStep(currentStep)
@@ -54,14 +80,17 @@ class LinearRidgeRegression(override val uid: String)
     new LinearRidgeRegressionModel(uid, weight, 0)
   }
 
+  /**
+   * Fit a [LinearRidgeRegressionModel] in a single SGD step with an initial model.
+   */
   override def fit(
       dataset: DataFrame,
       initModel: LinearRidgeRegressionModel): LinearRidgeRegressionModel = {
     val currentStep = $(step) + 1
     this.setStep(currentStep)
     val data = dataset.map { case Row(x: Vector, y: Double) => LabeledPoint(y, x)}
-    val weight =
-      LinearRidgeRegression.singleSGDStep(data, currentStep, Some(initModel.weights), $(step), $(stepsPerPulling))
+    val weight = LinearRidgeRegression
+      .singleSGDStep(data, currentStep, Some(initModel.weights), $(step), $(stepsPerPulling))
     new LinearRidgeRegressionModel(uid, weight, initModel.intercept)
   }
 
@@ -74,7 +103,7 @@ class LinearRidgeRegressionModel(
     val weights: Vector,
     val intercept: Double)
   extends RegressionModel[Vector, LinearRidgeRegressionModel]
-  with LinearRidgeRegressionBase {
+  with LinearRidgeRegressionParam {
 
   override protected def predict(features: Vector): Double = {
     dot(features, weights) + intercept

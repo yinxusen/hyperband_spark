@@ -10,13 +10,16 @@ case class ArmInfo(dataName: String, numArms: Int, maxIter: Int, trial: Int)
 
 abstract class SearchStrategy(
     val name: String,
-    val allResults: mutable.Map[ArmInfo, Array[Arm[_]]] = Map.empty) {
+    val allResults: mutable.Map[ArmInfo, Array[Arm[_]]] = new mutable.HashMap[ArmInfo, Array[Arm[_]]]()) {
 
   def appendResults(armInfo: ArmInfo, arms: Array[Arm[_]]) = {
     allResults(armInfo) = arms
   }
 
-  def search(modelFamilies: Array[ModelFamily], maxIter: Int, arms: Map[(String, String), Arm]): Arm
+  def search(
+      modelFamilies: Array[ModelFamily],
+      maxIter: Int,
+      arms: Map[(String, String), Arm[_]]): Arm[_]
 }
 
 class StaticSearchStrategy(
@@ -27,7 +30,7 @@ class StaticSearchStrategy(
   override def search(
       modelFamilies: Array[ModelFamily],
       maxIter: Int,
-      arms: Map[(String, String), Arm]): Arm = {
+      arms: Map[(String, String), Arm[_]]): Arm[_] = {
 
     assert(arms.keys.size != 0, "ERROR: No arms!")
     val armValues = arms.values.toArray

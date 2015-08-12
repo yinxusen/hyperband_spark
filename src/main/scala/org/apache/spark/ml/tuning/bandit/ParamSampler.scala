@@ -22,7 +22,9 @@ import scala.util.Random
 /**
  * Sample parameters given a range of continuous or categorical number.
  */
-abstract class ParamSampler[T](val name: String, val paramType: String) {
+abstract class ParamSampler[T](val name: String) {
+
+   val paramType: String
 
   /**
    * Sample an array of parameters.
@@ -39,7 +41,7 @@ class IntParamSampler(
     override val name: String,
     val minVal: Int,
     val maxVal: Int,
-    val initVal: Int = None) extends ParamSampler[Int](name, _) {
+    val initVal: Option[Int] = None) extends ParamSampler[Int](name) {
 
   override val paramType: String = "integer"
 
@@ -62,7 +64,7 @@ class DoubleParamSampler(
     val minVal: Double,
     val maxVal: Double,
     val scale: String = "log",
-    val initVal: Double = None) extends ParamSampler[Double](name, _) {
+    val initVal: Option[Double] = None) extends ParamSampler[Double](name) {
 
   override val paramType: String = "continuous"
 

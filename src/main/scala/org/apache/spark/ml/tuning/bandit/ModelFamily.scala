@@ -31,16 +31,16 @@ abstract class ModelFamily(val name: String, val paramList: Array[ParamSampler[_
    * Create an arm given initial dataset, parameters. The model family provides the
    * [PartialEstimator] plus with necessary settings.
    */
-  def createArm(initData: Dataset, params: ParamMap): Arm
+  def createArm(initData: Dataset, params: ParamMap): Arm[_]
 
-  def addArm(hp: ParamMap, arms: mutable.Map[(String, String), Arm], arm: Arm): Unit = {
-    arms += ((this.name, hp.toString) -> arm)
+  def addArm(hp: ParamMap, arms: mutable.Map[(String, String), Arm[_]], arm: Arm[_]): Unit = {
+    arms += (this.name, hp.toString) -> arm
   }
 
   def createArms(
       hpPoints: Array[ParamMap],
       initData: Dataset,
-      arms: mutable.Map[(String, String), Arm]): mutable.Map[(String, String), Arm] = {
+      arms: mutable.Map[(String, String), Arm[_]]): mutable.Map[(String, String), Arm[_]] = {
     for (hp <- hpPoints) {
       this.addArm(hp, arms, this.createArm(initData, hp))
     }

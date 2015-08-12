@@ -126,17 +126,6 @@ trait BanditValidatorParams extends Params with HasStepsPerPulling with HasSeed 
 
   /** @group getParam */
   def getSearchStrategies: Array[SearchStrategy] = $(searchStrategies)
-
-  /**
-   * The evaluator to evaluate errors of each arm.
-   *
-   * @group param
-   */
-  val evaluator: Param[Evaluator] = new Param(this, "evaluator",
-    "evaluator used to select hyper-parameters that maximize the cross-validated metric")
-
-  /** @group getParam */
-  def getEvaluator: Evaluator = $(evaluator)
 }
 
 /**
@@ -183,9 +172,6 @@ class BanditValidator(override val uid: String)
 
   /** @group setParam */
   def setSearchStrategies(value: Array[SearchStrategy]): this.type = set(searchStrategies, value)
-
-  /** @group setParam */
-  def setEvaluator(value: Evaluator): this.type = set(evaluator, value)
 
   /** @group setParam */
   def setStepsPerPulling(value: Int): this.type = set(stepsPerPulling, value)

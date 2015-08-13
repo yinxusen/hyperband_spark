@@ -18,6 +18,7 @@
 package org.apache.spark.ml.tuning.bandit
 
 import org.apache.spark.ml.feature.StandardScaler
+import org.apache.spark.mllib.regression.LabeledPoint
 import org.apache.spark.mllib.util.MLUtils
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 
@@ -67,7 +68,9 @@ object ClassifyDataset {
       fileName: String,
       normalizeY: Boolean = false): ClassifyDataset = {
     val sc = sqlCtx.sparkContext
-    val data = MLUtils.loadLibSVMFile(sc, fileName)
+    val data = MLUtils.loadLibSVMFile(sc, fileName).map { case LabeledPoint(label, features) =>
+      LabeledPoint(label, features.toDense)
+    }
     val (trainingAndValidation, test) = Utils.splitTrainTest(data, 0.1, 0)
     val (training, validation) = Utils.splitTrainTest(trainingAndValidation, 0.2, 0)
 

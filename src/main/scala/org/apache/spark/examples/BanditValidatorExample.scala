@@ -27,8 +27,13 @@ object BanditValidatorExample {
   def main(args: Array[String]): Unit = {
 
     val params: Array[ParamSampler[_]] = Array(new DoubleParamSampler("regularizer", -6, 0))
-    val linearRidgeRegressionModelFamily = new LinearRidgeRegressionModelFamily("linear ridge regression family", params)
-    val staticSearchStrategy = new StaticSearchStrategy("static_search", mutable.Map.empty[ArmInfo, Array[Arm[_]]])
+
+    val linearRidgeRegressionModelFamily =
+      new LinearRidgeRegressionModelFamily("linear ridge regression family", params)
+
+    val staticSearchStrategy =
+      new StaticSearchStrategy("static_search", mutable.Map.empty[ArmInfo, Array[Arm[_]]])
+
     val banditValidator = new BanditValidator()
       .setProblemType("CLASSIFY")
       .setDatasets(Map("australian" -> "/Users/panda/data/small_datasets/australian"))
@@ -41,13 +46,16 @@ object BanditValidatorExample {
       .setModelFamilies(Array(linearRidgeRegressionModelFamily))
       .setSearchStrategies(Array(staticSearchStrategy))
 
-    val conf = new SparkConf().setMaster("local[4]").setAppName("multi-arm bandit hyper-parameter selection")
+    val conf = new SparkConf()
+      .setMaster("local[4]")
+      .setAppName("multi-arm bandit hyper-parameter selection")
     val sc = new SparkContext(conf)
     val sqlCtx = new SQLContext(sc)
     val results = banditValidator.fit(sqlCtx)
 
     for (((ssName, dataName, numArms, iterPerArm), bestArmResults)<- results) {
-      println(s"Search strategy $ssName, data $dataName, number of arms $numArms, iteration per arm $iterPerArm\tBest result is ${bestArmResults.mkString(", ")}")
+      println(s"Search strategy $ssName, data $dataName, number of arms $numArms, iteration per" +
+        s" arm $iterPerArm\tBest result is ${bestArmResults.mkString(", ")}")
     }
   }
 }

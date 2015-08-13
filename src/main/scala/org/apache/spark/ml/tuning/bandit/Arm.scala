@@ -197,7 +197,8 @@ class ArmsAllocator(val allArms: Map[(String, String), Arms.ArmExistential]) {
   val arms = new mutable.HashMap[(String, String), Arms.ArmExistential]()
 
   def allocate(numArms: Int): Map[(String, String), Arms.ArmExistential] = {
-    assert(numArms <= allArms.size, "Required arms exceed the total amount.")
+    assert(numArms <= allArms.size,
+      s"Required $numArms arms exceed the total amount ${allArms.size}.")
     val arms = new mutable.HashMap[(String, String), Arms.ArmExistential]()
     var i = 0
     while (i < math.min(numArms, usedArms.size)) {

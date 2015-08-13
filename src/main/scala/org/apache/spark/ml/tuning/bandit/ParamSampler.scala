@@ -70,10 +70,7 @@ class DoubleParamSampler(
 
   override def getSamples(numVal: Int): Array[Double] = {
     if (this.scale == "log") {
-      val minExponent = math.log10(minVal)
-      val maxExponent = math.log10(maxVal)
-      ParamSampler.evenlySamplingFromRange(minExponent, maxExponent, numVal)
-        .map(x => math.pow(10, x))
+      ParamSampler.evenlySamplingFromRange(minVal, maxVal, numVal).map(x => math.pow(10, x))
     } else {
       ParamSampler.evenlySamplingFromRange(minVal, maxVal, numVal)
     }
@@ -81,9 +78,7 @@ class DoubleParamSampler(
 
   override def getOneRandomSample: Double = {
     if (this.scale == "log") {
-      val minExponent = math.log10(minVal)
-      val maxExponent = math.log10(maxVal)
-      math.pow(10, ParamSampler.samplingOneFromRange(minExponent, maxExponent))
+      math.pow(10, ParamSampler.samplingOneFromRange(minVal, maxVal))
     } else {
       ParamSampler.samplingOneFromRange(minVal, maxVal)
     }

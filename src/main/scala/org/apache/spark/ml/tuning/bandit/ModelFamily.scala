@@ -33,14 +33,18 @@ abstract class ModelFamily(val name: String, val paramList: Array[ParamSampler[_
    */
   def createArm(initData: Dataset, params: ParamMap): Arms.ArmExistential
 
-  def addArm(hp: ParamMap, arms: mutable.Map[(String, String), Arms.ArmExistential], arm: Arms.ArmExistential): Unit = {
+  def addArm(
+      hp: ParamMap,
+      arms: mutable.Map[(String, String), Arms.ArmExistential],
+      arm: Arms.ArmExistential): Unit = {
     arms += (this.name, hp.toString) -> arm
   }
 
   def createArms(
       hpPoints: Array[ParamMap],
       initData: Dataset,
-      arms: mutable.Map[(String, String), Arms.ArmExistential]): mutable.Map[(String, String), Arms.ArmExistential] = {
+      arms: mutable.Map[(String, String), Arms.ArmExistential]):
+  mutable.Map[(String, String), Arms.ArmExistential] = {
     for (hp <- hpPoints) {
       this.addArm(hp, arms, this.createArm(initData, hp))
     }

@@ -20,7 +20,6 @@ package org.apache.spark.ml.tuning.bandit
 import org.apache.spark.Logging
 import org.apache.spark.annotation.Experimental
 import org.apache.spark.ml.{Estimator, Model}
-import org.apache.spark.ml.evaluation.Evaluator
 import org.apache.spark.ml.param.{IntParam, Param, ParamMap, Params, _}
 import org.apache.spark.ml.param.shared.HasSeed
 import org.apache.spark.ml.util.Identifiable

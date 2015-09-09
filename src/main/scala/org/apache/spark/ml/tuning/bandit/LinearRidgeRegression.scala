@@ -17,7 +17,8 @@
 
 package org.apache.spark.ml.tuning.bandit
 
-import org.apache.spark.ml.param.shared.{HasInputCol, HasOutputCol}
+import org.apache.spark.ml.attribute.AttributeGroup
+import org.apache.spark.ml.param.shared.{HasLabelCol, HasFeaturesCol, HasInputCol, HasOutputCol}
 import org.apache.spark.ml.param.{DoubleParam, ParamMap, Params}
 import org.apache.spark.ml.regression.RegressionModel
 import org.apache.spark.ml.util.{Identifiable, SchemaUtils}
@@ -26,10 +27,10 @@ import org.apache.spark.mllib.linalg.{Vector, VectorUDT}
 import org.apache.spark.mllib.regression.{LabeledPoint, RidgeRegressionWithSGD}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{DataFrame, Row}
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{DoubleType, StructType}
 
 trait LinearRidgeRegressionParam
-  extends Params with HasInputCol with HasOutputCol with HasStepControl {
+  extends Params with HasFeaturesCol with HasLabelCol with HasOutputCol with HasStepControl {
 
   /**
    * Regularization parameter for linear ridge regression.
@@ -46,7 +47,8 @@ trait LinearRidgeRegressionParam
    * Validate and transform the input schema.
    */
   protected def validateAndTransformSchema(schema: StructType): StructType = {
-    SchemaUtils.checkColumnType(schema, $(inputCol), new VectorUDT)
+    SchemaUtils.checkColumnType(schema, $(featuresCol), new VectorUDT)
+    SchemaUtils.checkColumnType(schema, $(labelCol), DoubleType)
     schema
   }
 }
@@ -127,6 +129,8 @@ object LinearRidgeRegression {
       currentWeight: Option[Vector],
       regularizer: Double,
       steps: Int): Vector = {
+    val eta = 0.01 / math.sqrt(2.0 + currentStep)
+
     val stepSize = 0.01 / math.sqrt(2 + currentStep)
     val newModel = if (currentWeight == None) {
       RidgeRegressionWithSGD.train(data, steps, stepSize, regularizer, 0.1)

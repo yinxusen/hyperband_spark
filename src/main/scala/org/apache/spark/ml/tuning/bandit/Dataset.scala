@@ -94,17 +94,17 @@ object ClassifyDataset {
       new ClassifyDataset(
         dataName,
         yScaler.transform(scaledTraining).select("scaledFeatures", "scaledLabel")
-          .toDF("features", "label"),
+          .toDF("features", "label").cache(),
         yScaler.transform(scaledValidation).select("scaledFeatures", "scaledLabel")
-          .toDF("features", "label"),
+          .toDF("features", "label").cache(),
         yScaler.transform(scaledTest).select("scaledFeatures", "scaledLabel")
-          .toDF("features", "label"))
+          .toDF("features", "label").cache())
     } else {
       new ClassifyDataset(
         dataName,
-        scaledTraining.select("scaledFeatures", "label").toDF("features", "label"),
-        scaledValidation.select("scaledFeatures", "label").toDF("features", "label"),
-        scaledTest.select("scaledFeatures", "label").toDF("features", "label"))
+        scaledTraining.select("scaledFeatures", "label").toDF("features", "label").cache(),
+        scaledValidation.select("scaledFeatures", "label").toDF("features", "label").cache(),
+        scaledTest.select("scaledFeatures", "label").toDF("features", "label").cache())
     }
   }
 }

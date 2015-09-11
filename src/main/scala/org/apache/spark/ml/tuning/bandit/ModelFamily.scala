@@ -70,7 +70,10 @@ class LinearRidgeRegressionModelFamily(
    */
   override def createArm(initData: Dataset, params: ParamMap): Arm[LinearRidgeRegressionModel] = {
     val linearRidgeRegression= new LinearRidgeRegression()
-      .setDownSamplingFactor(0.1).setStepsPerPulling(1).copy(params)
+      .setNumOfFeatures(initData.numOfFeatures)
+      .setDownSamplingFactor(0.1)
+      .setStepsPerPulling(1)
+      .copy(params)
 
     val evaluator = new RegressionEvaluator().setMetricName("rmse")
 

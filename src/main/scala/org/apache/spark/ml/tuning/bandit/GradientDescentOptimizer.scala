@@ -33,14 +33,13 @@ import org.apache.spark.mllib.optimization.{Gradient, Updater, Optimizer}
  * @param gradient Gradient function to be used.
  * @param updater Updater to be used to update weights after every iteration.
  */
-class GradientDescentUtils (private var gradient: Gradient, private var updater: Updater)
-  extends Optimizer with Logging {
+class GradientDescentOptimizer (private var gradient: Gradient, private var updater: Updater) extends Optimizer with Logging {
 
   private var stepSize: Double = 1.0
-  private var currentStep: Int = 100
   private var regParam: Double = 0.0
   private var miniBatchFraction: Double = 1.0
   private var convergenceTol: Double = 0.001
+  private var currentStep: Int = 1
 
   /**
    * Set the initial step size of SGD for the first step. Default 1.0.
@@ -59,14 +58,6 @@ class GradientDescentUtils (private var gradient: Gradient, private var updater:
   @Experimental
   def setMiniBatchFraction(fraction: Double): this.type = {
     this.miniBatchFraction = fraction
-    this
-  }
-
-  /**
-   * Set the number of iterations for SGD. Default 100.
-   */
-  def setNumIterations(iters: Int): this.type = {
-    this.currentStep = iters
     this
   }
 
@@ -115,6 +106,11 @@ class GradientDescentUtils (private var gradient: Gradient, private var updater:
     this
   }
 
+  def setCurrentStep(cs: Int): this.type = {
+    this.currentStep = cs
+    this
+  }
+
   /**
    * :: DeveloperApi ::
    * Runs gradient descent on the given training data.
@@ -124,7 +120,7 @@ class GradientDescentUtils (private var gradient: Gradient, private var updater:
    */
   @DeveloperApi
   def optimize(data: RDD[(Double, Vector)], initialWeights: Vector): Vector = {
-    val (weights, _) = GradientDescentUtils.runSingleStepSGD(
+    val (weights, _) = GradientDescentOptimizer.runSingleStepSGD(
       data,
       gradient,
       updater,
@@ -144,7 +140,7 @@ class GradientDescentUtils (private var gradient: Gradient, private var updater:
  * Top-level method to run gradient descent.
  */
 @DeveloperApi
-object GradientDescentUtils extends Logging {
+object GradientDescentOptimizer extends Logging {
   def runSingleStepSGD(
       data: RDD[(Double, Vector)],
       gradient: Gradient,

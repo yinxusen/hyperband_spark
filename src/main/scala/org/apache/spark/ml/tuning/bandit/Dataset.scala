@@ -26,7 +26,8 @@ abstract class Dataset(
     val name: String,
     val trainingSet: DataFrame,
     val validationSet: DataFrame,
-    val testSet: DataFrame) {
+    val testSet: DataFrame,
+    val numOfFeatures: Int) {
 
   /**
    * A base validation error.
@@ -45,8 +46,9 @@ class ClassifyDataset(
     override val name: String,
     override val trainingSet: DataFrame,
     override val validationSet: DataFrame,
-    override val testSet: DataFrame)
-  extends Dataset(name, trainingSet, validationSet, testSet) {
+    override val testSet: DataFrame,
+    override val numOfFeatures: Int)
+  extends Dataset(name, trainingSet, validationSet, testSet, numOfFeatures) {
 
   override def baseValErr(): Double = {
     val ySum = validationSet.select("label").map { case Row(x: Double) => x}.sum()
@@ -71,6 +73,9 @@ object ClassifyDataset {
     val data = MLUtils.loadLibSVMFile(sc, fileName).map { case LabeledPoint(label, features) =>
       LabeledPoint(label, features.toDense)
     }
+
+    val numOfFeatures = data.first().features.size
+
     val (trainingAndValidation, test) = Utils.splitTrainTest(data, 0.1, 0)
     val (training, validation) = Utils.splitTrainTest(trainingAndValidation, 0.2, 0)
 
@@ -98,13 +103,15 @@ object ClassifyDataset {
         yScaler.transform(scaledValidation).select("scaledFeatures", "scaledLabel")
           .toDF("features", "label").cache(),
         yScaler.transform(scaledTest).select("scaledFeatures", "scaledLabel")
-          .toDF("features", "label").cache())
+          .toDF("features", "label").cache(),
+        numOfFeatures)
     } else {
       new ClassifyDataset(
         dataName,
         scaledTraining.select("scaledFeatures", "label").toDF("features", "label").cache(),
         scaledValidation.select("scaledFeatures", "label").toDF("features", "label").cache(),
-        scaledTest.select("scaledFeatures", "label").toDF("features", "label").cache())
+        scaledTest.select("scaledFeatures", "label").toDF("features", "label").cache(),
+        numOfFeatures)
     }
   }
 }

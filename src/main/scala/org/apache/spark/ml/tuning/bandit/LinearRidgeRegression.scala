@@ -19,11 +19,12 @@ package org.apache.spark.ml.tuning.bandit
 
 import org.apache.spark.ml.attribute.AttributeGroup
 import org.apache.spark.ml.param.shared.{HasLabelCol, HasFeaturesCol, HasInputCol, HasOutputCol}
-import org.apache.spark.ml.param.{DoubleParam, ParamMap, Params}
+import org.apache.spark.ml.param.{IntParam, DoubleParam, ParamMap, Params}
 import org.apache.spark.ml.regression.RegressionModel
 import org.apache.spark.ml.util.{Identifiable, SchemaUtils}
 import org.apache.spark.mllib.linalg.BLAS._
-import org.apache.spark.mllib.linalg.{Vector, VectorUDT}
+import org.apache.spark.mllib.linalg.{Vectors, Vector, DenseVector, VectorUDT}
+import org.apache.spark.mllib.optimization.{SquaredL2Updater, LeastSquaresGradient}
 import org.apache.spark.mllib.regression.{LabeledPoint, RidgeRegressionWithSGD}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{DataFrame, Row}
@@ -31,6 +32,9 @@ import org.apache.spark.sql.types.{DoubleType, StructType}
 
 trait LinearRidgeRegressionParam
   extends Params with HasFeaturesCol with HasLabelCol with HasOutputCol with HasStepControl {
+
+  val numOfFeatures: IntParam = new IntParam(this, "numOfFeatures", "the number of feature columns")
+  def getNumOfFeatures: Int = $(numOfFeatures)
 
   /**
    * Regularization parameter for linear ridge regression.
@@ -58,6 +62,8 @@ class LinearRidgeRegression(override val uid: String)
 
   def this() = this(Identifiable.randomUID("linear ridge regression"))
 
+  def setNumOfFeatures(value: Int): this.type = set(numOfFeatures, value)
+
   /** @group setParam */
   def setRegularizer(value: Double): this.type = set(regularizer, value)
 
@@ -84,7 +90,7 @@ class LinearRidgeRegression(override val uid: String)
     this.setStep(currentStep)
     val data = dataset.map { case Row(x: Vector, y: Double) => LabeledPoint(y, x)}
     val weight =
-      LinearRidgeRegression.singleSGDStep(data, currentStep, None, $(step), $(stepsPerPulling))
+      LinearRidgeRegression.runSingleStepSGD(data, currentStep, Vectors.zeros($(numOfFeatures)), $(step), $(stepsPerPulling))
     new LinearRidgeRegressionModel(uid, weight, 0)
   }
 
@@ -98,7 +104,7 @@ class LinearRidgeRegression(override val uid: String)
     this.setStep(currentStep)
     val data = dataset.map { case Row(x: Vector, y: Double) => LabeledPoint(y, x)}
     val weight = LinearRidgeRegression
-      .singleSGDStep(data, currentStep, Some(initModel.weights), $(step), $(stepsPerPulling))
+      .runSingleStepSGD(data, currentStep, initModel.weights, $(regularizer), $(stepsPerPulling))
     new LinearRidgeRegressionModel(uid, weight, initModel.intercept)
   }
 
@@ -123,20 +129,18 @@ class LinearRidgeRegressionModel(
 }
 
 object LinearRidgeRegression {
-  def singleSGDStep(
+  val gradient = new LeastSquaresGradient()
+  val updater = new SquaredL2Updater()
+
+  val optimizer = new GradientDescentOptimizer(gradient, updater)
+
+  def runSingleStepSGD(
       data: RDD[LabeledPoint],
       currentStep: Int,
-      currentWeight: Option[Vector],
+      currentWeight: Vector,
       regularizer: Double,
       steps: Int): Vector = {
-    val eta = 0.01 / math.sqrt(2.0 + currentStep)
+    optimizer.setRegParam(regularizer).setCurrentStep(currentStep).optimize(data.map(x => (x.label, x.features)), currentWeight)
 
-    val stepSize = 0.01 / math.sqrt(2 + currentStep)
-    val newModel = if (currentWeight == None) {
-      RidgeRegressionWithSGD.train(data, steps, stepSize, regularizer, 0.1)
-    } else {
-      RidgeRegressionWithSGD.train(data, steps, stepSize, regularizer, 0.1, currentWeight.get)
-    }
-    newModel.weights
   }
 }

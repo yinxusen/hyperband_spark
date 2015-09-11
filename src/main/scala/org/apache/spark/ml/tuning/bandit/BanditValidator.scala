@@ -193,7 +193,7 @@ class BanditValidator(override val uid: String)
 
       if ($(computeHistory)) {
         for ((armInfo, arm) <- allArms) {
-          val maxIter = math.pow(2, 14)
+          val maxIter = math.pow(2, 6)
           arm.trainToCompletion(maxIter)
           println(armInfo)
           println(arm.abridgedHistory.iterations.mkString(", "))

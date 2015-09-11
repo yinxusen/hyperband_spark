@@ -120,7 +120,7 @@ class GradientDescentOptimizer (private var gradient: Gradient, private var upda
    */
   @DeveloperApi
   def optimize(data: RDD[(Double, Vector)], initialWeights: Vector): Vector = {
-    val (weights, _) = GradientDescentOptimizer.runSingleStepSGD(
+    GradientDescentOptimizer.runSingleStepSGD(
       data,
       gradient,
       updater,
@@ -130,7 +130,6 @@ class GradientDescentOptimizer (private var gradient: Gradient, private var upda
       miniBatchFraction,
       initialWeights,
       convergenceTol)
-    weights
   }
 
 }

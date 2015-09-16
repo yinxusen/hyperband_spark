@@ -121,10 +121,10 @@ trait BanditValidatorParams extends Params with HasStepsPerPulling with HasSeed 
    *
    * @group param
    */
-  val searchStrategies: Param[Array[SearchStrategy]] = new Param(this, "searchStrategies", "")
+  val searchStrategies: Param[Array[Search]] = new Param(this, "searchStrategies", "")
 
   /** @group getParam */
-  def getSearchStrategies: Array[SearchStrategy] = $(searchStrategies)
+  def getSearchStrategies: Array[Search] = $(searchStrategies)
 }
 
 /**
@@ -170,7 +170,7 @@ class BanditValidator(override val uid: String)
   def setExpectedIters(value: Array[Int]): this.type = set(expectedIters, value)
 
   /** @group setParam */
-  def setSearchStrategies(value: Array[SearchStrategy]): this.type = set(searchStrategies, value)
+  def setSearchStrategies(value: Array[Search]): this.type = set(searchStrategies, value)
 
   /** @group setParam */
   def setStepsPerPulling(value: Int): this.type = set(stepsPerPulling, value)
@@ -207,8 +207,7 @@ class BanditValidator(override val uid: String)
         $(expectedIters).zipWithIndex.flatMap { case (expectedNumItersPerArm, idx) =>
           $(searchStrategies).map { case searchStrategy =>
             val arms = armsAllocator.allocate(numArms)
-            val bestArm = searchStrategy
-              .search($(modelFamilies), expectedNumItersPerArm * numArms, arms)
+            val bestArm = searchStrategy.search(expectedNumItersPerArm * numArms, arms)
             ((searchStrategy.name, dataName, numArms, expectedNumItersPerArm),
               bestArm.getResults(false, None))
           }

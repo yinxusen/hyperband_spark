@@ -31,11 +31,9 @@ object BanditValidatorExample {
     val linearRidgeRegressionModelFamily =
       new LinearRidgeRegressionModelFamily("linear ridge regression family", params)
 
-    val staticSearchStrategy =
-      new StaticSearchStrategy("static_search", mutable.Map.empty[ArmInfo, Array[Arm[_]]])
+    val staticSearchStrategy = new StaticSearch
 
-    val simpleSearchStrategy =
-      new SimpleBanditSearchStrategy("simple_search", mutable.Map.empty[ArmInfo, Array[Arm[_]]])
+    val simpleSearchStrategy = new SimpleBanditSearch
 
     val banditValidator = new BanditValidator()
       .setProblemType("REG")

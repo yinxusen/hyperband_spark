@@ -17,18 +17,17 @@
 
 package org.apache.spark.ml.tuning.bandit
 
-import org.apache.spark.ml.attribute.AttributeGroup
-import org.apache.spark.ml.param.shared.{HasLabelCol, HasFeaturesCol, HasInputCol, HasOutputCol}
-import org.apache.spark.ml.param.{IntParam, DoubleParam, ParamMap, Params}
+import org.apache.spark.ml.param.shared.{HasFeaturesCol, HasLabelCol, HasOutputCol}
+import org.apache.spark.ml.param.{DoubleParam, IntParam, ParamMap, Params}
 import org.apache.spark.ml.regression.RegressionModel
 import org.apache.spark.ml.util.{Identifiable, SchemaUtils}
 import org.apache.spark.mllib.linalg.BLAS._
-import org.apache.spark.mllib.linalg.{Vectors, Vector, DenseVector, VectorUDT}
-import org.apache.spark.mllib.optimization.{SquaredL2Updater, LeastSquaresGradient}
-import org.apache.spark.mllib.regression.{LabeledPoint, RidgeRegressionWithSGD}
+import org.apache.spark.mllib.linalg.{Vector, VectorUDT, Vectors}
+import org.apache.spark.mllib.optimization.{LeastSquaresGradient, SquaredL2Updater}
+import org.apache.spark.mllib.regression.LabeledPoint
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{DataFrame, Row}
 import org.apache.spark.sql.types.{DoubleType, StructType}
+import org.apache.spark.sql.{DataFrame, Row}
 
 trait LinearRidgeRegressionParam
   extends Params with HasFeaturesCol with HasLabelCol with HasOutputCol with HasStepControl {

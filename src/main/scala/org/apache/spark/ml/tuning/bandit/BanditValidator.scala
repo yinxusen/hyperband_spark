@@ -19,10 +19,10 @@ package org.apache.spark.ml.tuning.bandit
 
 import org.apache.spark.Logging
 import org.apache.spark.annotation.Experimental
-import org.apache.spark.ml.{Estimator, Model}
-import org.apache.spark.ml.param.{IntParam, Param, ParamMap, Params, _}
 import org.apache.spark.ml.param.shared.HasSeed
+import org.apache.spark.ml.param.{IntParam, Param, ParamMap, Params, _}
 import org.apache.spark.ml.util.Identifiable
+import org.apache.spark.ml.{Estimator, Model}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, SQLContext}
 
@@ -70,10 +70,10 @@ trait BanditValidatorParams extends Params with HasStepsPerPulling with HasSeed 
    *
    * @group param
    */
-  val modelFamilies: Param[Array[ModelFamily]] = new Param(this, "modelFamilies", "model families")
+  val modelFamilies: Param[Array[ArmFactory]] = new Param(this, "modelFamilies", "model families")
 
   /** @group getParam */
-  def getModelFamilies: Array[ModelFamily] = $(modelFamilies)
+  def getModelFamilies: Array[ArmFactory] = $(modelFamilies)
 
   /**
    * Number of trails to conduct the experiment.
@@ -155,7 +155,7 @@ class BanditValidator(override val uid: String)
   def setBaselines(value: Map[String, Double]): this.type = set(baselines, value)
 
   /** @group setParam */
-  def setModelFamilies(value: Array[ModelFamily]): this.type = set(modelFamilies, value)
+  def setModelFamilies(value: Array[ArmFactory]): this.type = set(modelFamilies, value)
 
   /** @group setParam */
   def setNumTrails(value: Int): this.type = set(numTrails, value)
@@ -185,7 +185,7 @@ class BanditValidator(override val uid: String)
     val results = $(datasets).flatMap { case (dataName, fileName) =>
       val data = ClassifyDataset.scaleAndPartitionData(sqlCtx, dataName, fileName)
       val allArms = Arms.generateArms($(modelFamilies), data, $(numArmsList).max).mapValues { arm =>
-        arm.abridgedHistory.compute = $(computeHistory)
+        arm.history.doCompute = $(computeHistory)
         arm
       }
 
@@ -193,11 +193,11 @@ class BanditValidator(override val uid: String)
 
       if ($(computeHistory)) {
         for ((armInfo, arm) <- allArms) {
-          val maxIter = math.pow(2, 6)
-          arm.trainToCompletion(maxIter)
+          val maxIter = math.pow(2, 6).toInt
+          arm.train(maxIter)
           println(armInfo)
-          println(arm.abridgedHistory.iterations.mkString(", "))
-          println(arm.abridgedHistory.errors.mkString(", "))
+          println(arm.history.iterations.mkString(", "))
+          println(arm.history.errors.mkString(", "))
         }
       }
 

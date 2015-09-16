@@ -17,8 +17,8 @@
 
 package org.apache.spark.ml.tuning.bandit
 
-import org.apache.spark.ml.{Estimator, Model}
 import org.apache.spark.ml.param.ParamMap
+import org.apache.spark.ml.{Estimator, Model}
 import org.apache.spark.sql.DataFrame
 
 /**

@@ -29,19 +29,19 @@ abstract class Search {
     results(armInfo) = arms
   }
 
-  def search(totalBudget: Int, arms: Map[(String, String), Arm[_]]): Arm[_]
+  def search(totalBudgets: Int, arms: Map[(String, String), Arm[_]]): Arm[_]
 }
 
 class StaticSearch extends Search {
   override val name: String = "static search"
-  override def search(totalBudget: Int, arms: Map[(String, String), Arm[_]]): Arm[_] = {
+  override def search(totalBudgets: Int, arms: Map[(String, String), Arm[_]]): Arm[_] = {
 
     assert(arms.keys.size != 0, "ERROR: No arms!")
     val armValues = arms.values.toArray
     val numArms = arms.keys.size
     var i = 0
-    while (i  < totalBudget) {
-      armValues(i % numArms).pullArm()
+    while (i  < totalBudgets) {
+      armValues(i % numArms).pull()
       i += 1
     }
 
@@ -52,15 +52,15 @@ class StaticSearch extends Search {
 
 class SimpleBanditSearch extends Search {
   override val name: String = "simple bandit search"
-  override def search(totalBudget: Int, arms: Map[(String, String), Arm[_]]): Arm[_] = {
+  override def search(totalBudgets: Int, arms: Map[(String, String), Arm[_]]): Arm[_] = {
     val numArms = arms.size
     val alpha = 0.3
-    val initialRounds = math.max(1, (alpha * totalBudget / numArms).toInt)
+    val initialRounds = math.max(1, (alpha * totalBudgets / numArms).toInt)
 
     val armValues = arms.values.toArray
 
     for (i <- 0 until initialRounds) {
-      armValues.foreach(_.pullArm())
+      armValues.foreach(_.pull())
     }
 
     var currentBudget = initialRounds * numArms
@@ -69,8 +69,8 @@ class SimpleBanditSearch extends Search {
     val preSelectedArms = armValues.sortBy(_.getResults(true, Some("validation"))(1))
       .reverse.dropRight(numArms - numPreSelectedArms)
 
-    while (currentBudget < totalBudget) {
-      preSelectedArms(currentBudget % numPreSelectedArms).pullArm()
+    while (currentBudget < totalBudgets) {
+      preSelectedArms(currentBudget % numPreSelectedArms).pull()
       currentBudget += 1
     }
 
@@ -81,30 +81,8 @@ class SimpleBanditSearch extends Search {
 
 class ExponentialWeightsSearch extends Search {
   override val name: String = "exponential weight search"
-  override def search(totalBudget: Int, arms: Map[(String, String), Arm[_]]): Arm[_] = {
-    val numArms = arms.size
-    val alpha = 0.3
-    val initialRounds = math.max(1, (alpha * totalBudget / numArms).toInt)
-
-    val armValues = arms.values.toArray
-
-    for (i <- 0 until initialRounds) {
-      armValues.foreach(_.pullArm())
-    }
-
-    var currentBudget = initialRounds * numArms
-    val numGoodArms = math.max(1, (alpha * numArms).toInt)
-
-    val remainedArms = armValues
-      .sortBy(_.getResults(true, Some("validation"))(1)).reverse.dropRight(numArms - numGoodArms)
-
-    while (currentBudget < totalBudget) {
-      remainedArms(currentBudget % numGoodArms).pullArm()
-      currentBudget += 1
-    }
-
-    val bestArm = remainedArms.maxBy(arm => arm.getResults(true, Some("validation"))(1))
-    bestArm
+  override def search(totalBudgets: Int, arms: Map[(String, String), Arm[_]]): Arm[_] = {
+    ???
   }
 }
 

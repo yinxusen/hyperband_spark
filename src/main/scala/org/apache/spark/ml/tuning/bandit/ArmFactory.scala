@@ -25,7 +25,7 @@ import scala.collection.mutable
 /**
  * Model family to create arms.
  */
-abstract class ModelFamily(val name: String, val paramList: Array[ParamSampler[_]]) {
+abstract class ArmFactory(val name: String, val paramList: Array[ParamSampler[_]]) {
 
   /**
    * Create an arm given initial dataset, parameters. The model family provides the
@@ -55,10 +55,10 @@ abstract class ModelFamily(val name: String, val paramList: Array[ParamSampler[_
 /**
  * Linear ridge regression model family, which provides [LinearRidgeRegression] to generate an arm.
  */
-class LinearRidgeRegressionModelFamily(
+class LinearRidgeRegressionArmFactory(
     override val name: String,
     override val paramList: Array[ParamSampler[_]])
-  extends ModelFamily(name, paramList) {
+  extends ArmFactory(name, paramList) {
 
   /**
    * Create an arm with a [LinearRidgeRegression] estimator. Note that the params should only

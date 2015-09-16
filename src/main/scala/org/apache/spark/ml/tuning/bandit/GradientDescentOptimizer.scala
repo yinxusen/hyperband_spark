@@ -17,15 +17,12 @@
 
 package org.apache.spark.ml.tuning.bandit
 
-import scala.collection.mutable.ArrayBuffer
-
-import breeze.linalg.{DenseVector => BDV, norm}
-
-import org.apache.spark.annotation.{Experimental, DeveloperApi}
+import breeze.linalg.{DenseVector => BDV}
 import org.apache.spark.Logging
+import org.apache.spark.annotation.{DeveloperApi, Experimental}
+import org.apache.spark.mllib.linalg.{Vector, Vectors}
+import org.apache.spark.mllib.optimization.{Gradient, Optimizer, Updater}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.mllib.linalg.{Vectors, Vector}
-import org.apache.spark.mllib.optimization.{Gradient, Updater, Optimizer}
 
 
 /**

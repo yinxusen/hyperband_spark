@@ -25,14 +25,14 @@ import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 /**
- * Keep record of abridged histories in an iterative program.
+ * Keep record of compressed histories in an iterative program.
  *
  * @param iterations The iteration number as the X-axis.
  * @param errors The error at each iteration as the Y-axis.
- * @param alpha The decay parameter so as to abridge the errors.
+ * @param alpha The decay parameter so as to compress the errors.
  */
-class AbridgedHistory(
-    var compute: Boolean,
+class CompressedHistory(
+    var doCompute: Boolean,
     var iterations: Array[Int],
     var errors: Array[Double],
     var alpha: Double)
@@ -45,7 +45,7 @@ class AbridgedHistory(
  */
 class Arm[M <: Model[M]](
     var data: Dataset,
-    val modelType: String,
+    val name: String,
     val estimator: PartialEstimator[M],
     val evaluator: Evaluator) {
 
@@ -56,7 +56,7 @@ class Arm[M <: Model[M]](
 
   var results: Array[Double] = Array.empty
 
-  val abridgedHistory: AbridgedHistory = new AbridgedHistory(false, Array.empty, Array.empty, 1.2)
+  val history: CompressedHistory = new CompressedHistory(false, Array.empty, Array.empty, 1.2)
 
   /**
    * Reset the arm to use in a new [SearchStrategy].
@@ -72,18 +72,19 @@ class Arm[M <: Model[M]](
   /**
    * Strip the arm so as to save the storage space. Only the key items are retained.
    */
-  def stripArm(): Unit = {
+  def strip(): this.type = {
     this.data = null
     this.model = None
-    this.abridgedHistory.iterations = Array.empty
-    this.abridgedHistory.errors = Array.empty
+    this.history.iterations = Array.empty
+    this.history.errors = Array.empty
+    this
   }
 
   /**
    * Pull the arm to perform one step of the iterative [PartialEstimator]. Model will be updated
    * after the pulling.
    */
-  def pullArm(): Unit = {
+  def pull(): this.type = {
     this.numPulls += 1
     val partialModel = if (model == None) {
       this.estimator.fit(data.trainingSet)
@@ -91,6 +92,7 @@ class Arm[M <: Model[M]](
       this.estimator.fit(data.trainingSet, model.get)
     }
     this.model = Some(partialModel)
+    this
   }
 
   /**
@@ -98,47 +100,47 @@ class Arm[M <: Model[M]](
    * updated after training. The (iteration, error) pair of training process will be kept in the
    * `abridgedHistory`.
    */
-  def trainToCompletion(maxIter: Double): Unit = {
+  def train(maxIter: Int): this.type = {
     this.reset()
     val valXArrayBuffer = new ArrayBuffer[Int]()
     val valYArrayBuffer = new ArrayBuffer[Double]()
     while (this.numPulls < maxIter) {
-      this.pullArm()
-      if (this.abridgedHistory.compute) {
-        if (this.abridgedHistory.iterations.size == 0 ||
-          this.numPulls > valXArrayBuffer.last * this.abridgedHistory.alpha) {
+      this.pull()
+      if (this.history.doCompute) {
+        if (this.history.iterations.size == 0 ||
+          this.numPulls > valXArrayBuffer.last * this.history.alpha) {
           valXArrayBuffer.append(this.numPulls)
           val error = this.getResults(true, Some("validation"))(1)
           valYArrayBuffer.append(error)
         }
       }
     }
-    this.abridgedHistory.iterations = valXArrayBuffer.toArray
-    this.abridgedHistory.errors = valYArrayBuffer.toArray
+    this.history.iterations = valXArrayBuffer.toArray
+    this.history.errors = valYArrayBuffer.toArray
+    this
   }
 
   /**
    * Evaluate the model according to training, validation, and test set.
    *
-   * @param partition "train", "validation", or "test". Specify each of them then evaluating it.
+   * @param part "train", "validation", or "test". Specify each of them then evaluating it.
    * @return An array of (training set error, validation set error, test set error).
    */
-  def getResults(
-      forceRecompute: Boolean = true, partition: Option[String] = None): Array[Double] = {
+  def getResults(recompute: Boolean = true, part: Option[String] = None): Array[Double] = {
     if (model.isEmpty) {
       throw new Exception("model is empty")
     } else {
-      if (this.results.isEmpty || forceRecompute) {
+      if (this.results.isEmpty || recompute) {
         this.numEvals += 1
-        if (partition.isEmpty || this.results.isEmpty) {
+        if (part.isEmpty || this.results.isEmpty) {
           this.results = Array(evaluator.evaluate(model.get.transform(data.trainingSet)),
             evaluator.evaluate(model.get.transform(data.validationSet)),
             evaluator.evaluate(model.get.transform(data.testSet)))
-        } else if (partition == Some("train")) {
+        } else if (part == Some("train")) {
           this.results(0) = evaluator.evaluate(model.get.transform(data.trainingSet))
-        } else if (partition == Some("validation")) {
+        } else if (part == Some("validation")) {
           this.results(1) = evaluator.evaluate(model.get.transform(data.validationSet))
-        } else if (partition == Some("test")) {
+        } else if (part == Some("test")) {
           this.results(2) = evaluator.evaluate(model.get.transform(data.testSet))
         } else {
           throw new Exception(
@@ -151,7 +153,6 @@ class Arm[M <: Model[M]](
 }
 
 object Arms {
-
   type ArmExistential = Arm[M] forSome {type M <: Model[M]}
 
   /**
@@ -161,16 +162,16 @@ object Arms {
    * @return Map of (model family name, hyper-parameter name) -> arm.
    */
   def generateArms(
-      modelFamilies: Array[ModelFamily],
+      armFactories: Array[ArmFactory],
       data: Dataset,
       numArmsPerParameter: Int): Map[(String, String), Arms.ArmExistential] = {
     val arms = new mutable.HashMap[(String, String), Arms.ArmExistential]()
-    for (modelFamily <- modelFamilies) {
-      val numParamsToTune = modelFamily.paramList.size
+    for (armFactory <- armFactories) {
+      val numParamsToTune = armFactory.paramList.size
       val numArmsForModelFamily = numParamsToTune * numArmsPerParameter
       val hyperParameterPoints = (0 until numArmsForModelFamily).map { index =>
         val paramMap = new ParamMap()
-        modelFamily.paramList.map {
+        armFactory.paramList.map {
           case parameter@(_: IntParamSampler) =>
             val param = new IntParam("from arm", parameter.name, "arm generated parameter")
             paramMap.put(param, parameter.getOneRandomSample)
@@ -181,36 +182,8 @@ object Arms {
         }
         paramMap
       }.toArray
-      modelFamily.createArms(hyperParameterPoints, data, arms)
+      armFactory.createArms(hyperParameterPoints, data, arms)
     }
     arms.toMap
-  }
-}
-
-/**
- * Allocate an array of pre-generated arms for a [SearchStrategy].
- */
-class ArmsAllocator(val allArms: Map[(String, String), Arms.ArmExistential]) {
-  val usedArms = new ArrayBuffer[(String, String)]()
-  val unusedArms = new ArrayBuffer[(String, String)]()
-  unusedArms.appendAll(allArms.keys)
-  val arms = new mutable.HashMap[(String, String), Arms.ArmExistential]()
-
-  def allocate(numArms: Int): Map[(String, String), Arms.ArmExistential] = {
-    assert(numArms <= allArms.size,
-      s"Required $numArms arms exceed the total amount ${allArms.size}.")
-    val arms = new mutable.HashMap[(String, String), Arms.ArmExistential]()
-    var i = 0
-    while (i < math.min(numArms, usedArms.size)) {
-      arms += usedArms(i) -> allArms(usedArms(i))
-      i += 1
-    }
-    while (i < numArms) {
-      val armInfo = unusedArms.remove(0)
-      arms += armInfo -> allArms(armInfo)
-      usedArms.append(armInfo)
-      i += 1
-    }
-    arms.toMap.mapValues(_.reset())
   }
 }

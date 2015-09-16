@@ -29,7 +29,7 @@ object BanditValidatorExample {
     val params: Array[ParamSampler[_]] = Array(new DoubleParamSampler("regularizer", -6, 0))
 
     val linearRidgeRegressionModelFamily =
-      new LinearRidgeRegressionModelFamily("linear ridge regression family", params)
+      new LinearRidgeRegressionArmFactory("linear ridge regression family", params)
 
     val staticSearchStrategy = new StaticSearch
 

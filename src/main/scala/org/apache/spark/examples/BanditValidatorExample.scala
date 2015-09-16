@@ -34,6 +34,9 @@ object BanditValidatorExample {
     val staticSearchStrategy =
       new StaticSearchStrategy("static_search", mutable.Map.empty[ArmInfo, Array[Arm[_]]])
 
+    val simpleSearchStrategy =
+      new SimpleBanditSearchStrategy("simple_search", mutable.Map.empty[ArmInfo, Array[Arm[_]]])
+
     val banditValidator = new BanditValidator()
       .setProblemType("REG")
       .setDatasets(Map("msd" -> "/Users/panda/data/msd_trunc.libsvm"))
@@ -44,7 +47,7 @@ object BanditValidatorExample {
       .setNumTrails(2)
       .setStepsPerPulling(1)
       .setModelFamilies(Array(linearRidgeRegressionModelFamily))
-      .setSearchStrategies(Array(staticSearchStrategy))
+      .setSearchStrategies(Array(staticSearchStrategy, simpleSearchStrategy))
 
     val conf = new SparkConf()
       .setMaster("local[4]")

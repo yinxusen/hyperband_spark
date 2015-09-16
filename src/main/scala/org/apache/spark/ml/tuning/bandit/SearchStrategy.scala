@@ -17,6 +17,8 @@
 
 package org.apache.spark.ml.tuning.bandit
 
+import org.apache.commons.math3.optim.MaxIter
+
 import scala.collection.mutable
 
 case class ArmInfo(dataName: String, numArms: Int, maxIter: Int, trial: Int)
@@ -32,7 +34,7 @@ abstract class SearchStrategy(
 
   def search(
       modelFamilies: Array[ModelFamily],
-      maxIter: Int,
+      totalBudget: Int,
       arms: Map[(String, String), Arm[_]]): Arm[_]
 }
 
@@ -43,19 +45,54 @@ class StaticSearchStrategy(
 
   override def search(
       modelFamilies: Array[ModelFamily],
-      maxIter: Int,
+      totalBudget: Int,
       arms: Map[(String, String), Arm[_]]): Arm[_] = {
 
     assert(arms.keys.size != 0, "ERROR: No arms!")
     val armValues = arms.values.toArray
     val numArms = arms.keys.size
     var i = 0
-    while (i  < maxIter) {
+    while (i  < totalBudget) {
       armValues(i % numArms).pullArm()
       i += 1
     }
 
-    val bestArm = armValues.minBy(arm => arm.getResults(true, Some("validation"))(1))
+    val bestArm = armValues.maxBy(arm => arm.getResults(true, Some("validation"))(1))
+    bestArm
+  }
+}
+
+class SimpleBanditSearchStrategy(
+    override val name: String,
+    override val allResults: mutable.Map[ArmInfo, Array[Arm[_]]])
+  extends SearchStrategy(name, allResults) {
+
+  override def search(
+      modelFamily: Array[ModelFamily],
+      totalBudget: Int,
+      arms: Map[(String, String), Arm[_]]): Arm[_] = {
+    val numArms = arms.size
+    val alpha = 0.3
+    val initialRounds = math.max(1, (alpha * totalBudget / numArms).toInt)
+
+    val armValues = arms.values.toArray
+
+    for (i <- 0 until initialRounds) {
+      armValues.foreach(_.pullArm())
+    }
+
+    var currentBudget = initialRounds * numArms
+    val numGoodArms = math.max(1, (alpha * numArms).toInt)
+
+    val remainedArms = armValues
+      .sortBy(_.getResults(true, Some("validation"))(1)).reverse.dropRight(numArms - numGoodArms)
+
+    while (currentBudget < totalBudget) {
+      remainedArms(currentBudget % numGoodArms).pullArm()
+      currentBudget += 1
+    }
+
+    val bestArm = remainedArms.maxBy(arm => arm.getResults(true, Some("validation"))(1))
     bestArm
   }
 }

@@ -28,6 +28,6 @@ class ArmSuite extends FunSuite with BanditTestContext {
   }
 
   test("Test get results") {
-    
+
   }
 }

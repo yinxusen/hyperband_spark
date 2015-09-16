@@ -19,7 +19,7 @@ package org.apache.spark.ml.tuning.bandit
 
 import org.apache.spark.Logging
 import org.apache.spark.annotation.Experimental
-import org.apache.spark.ml.param.shared.HasSeed
+import org.apache.spark.ml.param.shared.{HasMaxIter, HasSeed}
 import org.apache.spark.ml.param.{IntParam, Param, ParamMap, Params, _}
 import org.apache.spark.ml.util.Identifiable
 import org.apache.spark.ml.{Estimator, Model}
@@ -29,7 +29,7 @@ import org.apache.spark.sql.{DataFrame, SQLContext}
 /**
  * Params for [[BanditValidator]] and [[BanditValidatorModel]].
  */
-trait BanditValidatorParams extends Params with HasStepsPerPulling with HasSeed {
+trait BanditValidatorParams extends Params with HasStepsPerPulling with HasSeed with HasMaxIter {
 
   /**
    *  Parameter to define problem type.
@@ -70,10 +70,10 @@ trait BanditValidatorParams extends Params with HasStepsPerPulling with HasSeed 
    *
    * @group param
    */
-  val modelFamilies: Param[Array[ArmFactory]] = new Param(this, "modelFamilies", "model families")
+  val armFactories: Param[Array[ArmFactory]] = new Param(this, "armFactories", "arm factories")
 
   /** @group getParam */
-  def getModelFamilies: Array[ArmFactory] = $(modelFamilies)
+  def getArmFactories: Array[ArmFactory] = $(armFactories)
 
   /**
    * Number of trails to conduct the experiment.
@@ -125,6 +125,8 @@ trait BanditValidatorParams extends Params with HasStepsPerPulling with HasSeed 
 
   /** @group getParam */
   def getSearchStrategies: Array[Search] = $(searchStrategies)
+
+  setDefault(maxIter -> math.pow(2, 6).toInt)
 }
 
 /**
@@ -155,7 +157,7 @@ class BanditValidator(override val uid: String)
   def setBaselines(value: Map[String, Double]): this.type = set(baselines, value)
 
   /** @group setParam */
-  def setModelFamilies(value: Array[ArmFactory]): this.type = set(modelFamilies, value)
+  def setArmFactories(value: Array[ArmFactory]): this.type = set(armFactories, value)
 
   /** @group setParam */
   def setNumTrails(value: Int): this.type = set(numTrails, value)
@@ -178,13 +180,16 @@ class BanditValidator(override val uid: String)
   /** @group setParam */
   def setSeed(value: Long): this.type = set(seed, value)
 
+  /** @group setParam */
+  def setMaxIter(value: Int): this.type = set(maxIter, value)
+
   // TODO
   override def fit(dataset: DataFrame): BanditValidatorModel = ???
 
   def fit(sqlCtx: SQLContext) = {
     val results = $(datasets).flatMap { case (dataName, fileName) =>
       val data = ClassifyDataset.scaleAndPartitionData(sqlCtx, dataName, fileName)
-      val allArms = Arms.generateArms($(modelFamilies), data, $(numArmsList).max).mapValues { arm =>
+      val allArms = Arms.generateArms($(armFactories), data, $(numArmsList).max).mapValues { arm =>
         arm.history.doCompute = $(computeHistory)
         arm
       }
@@ -193,8 +198,7 @@ class BanditValidator(override val uid: String)
 
       if ($(computeHistory)) {
         for ((armInfo, arm) <- allArms) {
-          val maxIter = math.pow(2, 6).toInt
-          arm.train(maxIter)
+          arm.train($(maxIter))
           println(armInfo)
           println(arm.history.iterations.mkString(", "))
           println(arm.history.errors.mkString(", "))
@@ -202,7 +206,7 @@ class BanditValidator(override val uid: String)
       }
 
       $(numArmsList).flatMap { case numArmsPerParameter =>
-        val numArms = $(modelFamilies)
+        val numArms = $(armFactories)
           .map(modelFamily => math.pow(numArmsPerParameter, modelFamily.paramList.size)).sum.toInt
         $(expectedIters).zipWithIndex.flatMap { case (expectedNumItersPerArm, idx) =>
           $(searchStrategies).map { case searchStrategy =>

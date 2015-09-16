@@ -21,19 +21,16 @@ import org.apache.spark.sql.SQLContext
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.ml.tuning.bandit._
 
-import scala.collection.mutable
-
 object BanditValidatorExample {
   def main(args: Array[String]): Unit = {
 
     val params: Array[ParamSampler[_]] = Array(new DoubleParamSampler("regularizer", -6, 0))
 
-    val linearRidgeRegressionModelFamily =
-      new LinearRidgeRegressionArmFactory("linear ridge regression family", params)
+    val lrrGenerator = new LinearRidgeRegressionArmFactory("linear ridge regression family", params)
 
-    val staticSearchStrategy = new StaticSearch
+    val staticSearch= new StaticSearch
 
-    val simpleSearchStrategy = new SimpleBanditSearch
+    val simpleSearch= new SimpleBanditSearch
 
     val banditValidator = new BanditValidator()
       .setProblemType("REG")
@@ -44,8 +41,8 @@ object BanditValidatorExample {
       .setSeed(1066)
       .setNumTrails(2)
       .setStepsPerPulling(1)
-      .setModelFamilies(Array(linearRidgeRegressionModelFamily))
-      .setSearchStrategies(Array(staticSearchStrategy, simpleSearchStrategy))
+      .setArmFactories(Array(lrrGenerator))
+      .setSearchStrategies(Array(staticSearch, simpleSearch))
 
     val conf = new SparkConf()
       .setMaster("local[4]")

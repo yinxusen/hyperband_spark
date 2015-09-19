@@ -93,7 +93,7 @@ class ExponentialWeightsSearch extends Search {
       val it = if (t < numArms) t else Utils.chooseOne(pt)
       val arm = armValues(it)
       arm.pull()
-      lt(it) += arm.getResults(true, Some("val"))(1)
+      lt(it) += arm.getResults(true, Some("validation"))(1)
       wt(it) = math.exp(- eta * lt(it))
     }
     val bestArm = armValues.maxBy(arm => arm.getResults(true, Some("validation"))(1))

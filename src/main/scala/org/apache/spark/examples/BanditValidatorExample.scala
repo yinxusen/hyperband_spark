@@ -32,6 +32,8 @@ object BanditValidatorExample {
 
     val simpleSearch= new SimpleBanditSearch
 
+    val exp3 = new ExponentialWeightsSearch
+
     val banditValidator = new BanditValidator()
       .setProblemType("REG")
       .setDatasets(Map("msd" -> "/Users/panda/data/msd_trunc.libsvm"))
@@ -42,7 +44,7 @@ object BanditValidatorExample {
       .setNumTrails(2)
       .setStepsPerPulling(1)
       .setArmFactories(Array(lrrGenerator))
-      .setSearchStrategies(Array(staticSearch, simpleSearch))
+      .setSearchStrategies(Array(staticSearch, simpleSearch, exp3))
 
     val conf = new SparkConf()
       .setMaster("local[4]")
@@ -53,7 +55,7 @@ object BanditValidatorExample {
 
     for (((ssName, dataName, numArms, iterPerArm), bestArmResults)<- results) {
       println(s"Search strategy $ssName, data $dataName, number of arms $numArms, iteration per" +
-        s" arm $iterPerArm\tBest result is ${bestArmResults.mkString(", ")}")
+        s" arm $iterPerArm.\t\tBest result is ${bestArmResults.mkString(", ")}")
     }
   }
 }

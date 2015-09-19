@@ -23,6 +23,7 @@ import org.apache.spark.util.random.BernoulliCellSampler
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
+import scala.util.Random
 
 object Utils {
   def splitTrainTest[T: ClassTag](rdd: RDD[T], testFraction: Double, seed: Int): (RDD[T], RDD[T]) = {
@@ -30,6 +31,21 @@ object Utils {
     val test = new PartitionwiseSampledRDD(rdd, sampler, true, seed)
     val training = new PartitionwiseSampledRDD(rdd, sampler.cloneComplement(), true, seed)
     (training, test)
+  }
+
+  /**
+   * Randomly choose one sample given a frequency histogram. The higher the frequency of one
+   * element, the easier the element be chose.
+   */
+  def chooseOne(p: Array[Double]): Int = {
+    val threshold = Random.nextDouble() * p.sum
+    var i = 0
+    var sum = 0.0
+    while ((sum < threshold) && (i < p.size)) {
+      sum += p(i)
+      i += 1
+    }
+    i - 1
   }
 }
 

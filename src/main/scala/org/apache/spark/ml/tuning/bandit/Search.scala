@@ -82,7 +82,22 @@ class SimpleBanditSearch extends Search {
 class ExponentialWeightsSearch extends Search {
   override val name: String = "exponential weight search"
   override def search(totalBudgets: Int, arms: Map[(String, String), Arm[_]]): Arm[_] = {
-    ???
+    val numArms = arms.size
+    val armValues = arms.values.toArray
+    val eta = math.sqrt(2 * math.log(numArms) / (numArms * totalBudgets))
+
+    val lt = new Array[Double](numArms)
+    val wt = lt.map(x => math.exp(- eta * x))
+    for (t <- 0 until totalBudgets) {
+      val pt = wt.map(x => x / wt.sum)
+      val it = if (t < numArms) t else Utils.chooseOne(pt)
+      val arm = armValues(it)
+      arm.pull()
+      lt(it) += arm.getResults(true, Some("val"))(1)
+      wt(it) = math.exp(- eta * lt(it))
+    }
+    val bestArm = armValues.maxBy(arm => arm.getResults(true, Some("validation"))(1))
+    bestArm
   }
 }
 

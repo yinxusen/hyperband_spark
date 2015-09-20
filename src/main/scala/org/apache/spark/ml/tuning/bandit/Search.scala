@@ -111,30 +111,43 @@ class LILUCBSearch extends Search {
     val numArms = arms.size
     val armValues = arms.values.toArray
 
-    val nj = new Array[Double](numArms)
-    val sumj = new Array[Double](numArms)
+    val nj = Vectors.zeros(numArms).asInstanceOf[DenseVector]
+    val sumj = Vectors.zeros(numArms).asInstanceOf[DenseVector]
     for (i <- 0 until numArms) {
       armValues(i).pull()
-      sumj(i) += armValues(i).getResults(true, Some("validation"))(1)
-      nj(i) += 1
+      sumj.values(i) += armValues(i).getValidationResult()
+      nj.values(i) += 1
     }
 
     val delta = 0.1
     var t = numArms
-    val ct = nj.map(x => 1.5 * math.sqrt(0.5 * math.log(5.0 * math.log(3.0 * x) / delta) / x))
-    val ucbj = sumj.zip(nj).zip(ct).map { case ((sj, j), c) => sj / j - c}
+    val ct = Vectors.zeros(numArms).asInstanceOf[DenseVector]
+    copy(nj, ct)
+    scal(3.0, ct)
+    Utils.log(ct)
+    scal(5.0 / delta, ct)
+    Utils.log(ct)
+    scal(0.5, ct)
+    Utils.div(nj, ct)
+    Utils.sqrt(ct)
+    scal(1.5, ct)
+
+    val ucbj = Vectors.zeros(numArms).asInstanceOf[DenseVector]
+    copy(sumj, ucbj)
+    Utils.div(nj, ucbj)
+    Utils.sub(ct, ucbj)
 
     while (t < totalBudgets) {
-      val it = ucbj.zipWithIndex.minBy(_._1)._2
+      val it = Utils.argMin(ucbj)
       armValues(it).pull()
-      sumj(it) += armValues(it).getResults(true, Some("validation"))(1)
-      nj(it) += 1
-      ct(it) = 1.5 * math.sqrt(0.5 * math.log(5.0 * math.log(3.0 * nj(it)) / delta) / nj(it))
-      ucbj(it) = sumj(it) / nj(it) - ct(it)
+      sumj.values(it) += armValues(it).getValidationResult()
+      nj.values(it) += 1
+      ct.values(it) = 1.5 * math.sqrt(0.5 * math.log(5.0 * math.log(3.0 * nj(it)) / delta) / nj(it))
+      ucbj.values(it) = sumj(it) / nj(it) - ct(it)
       t += 1
     }
 
-    val bestArm = armValues.maxBy(arm => arm.getResults(false, Some("validation"))(1))
+    val bestArm = armValues.maxBy(arm => arm.getValidationResult(false))
     bestArm
   }
 }
@@ -159,8 +172,8 @@ class LUCBSearch extends Search {
     val ucbj = sumj.zip(nj).zip(ct).map { case ((sj, j), c) => sj / j - c}
 
     while (t + 2 <= totalBudgets) {
-      val inds0 = Utils.argSort(sumj.zip(nj).map {case (sj, j) => sj / j})
-      val inds1 = Utils.argSort(ucbj)
+      val inds0 = argSort(sumj.zip(nj).map {case (sj, j) => sj / j})
+      val inds1 = argSort(ucbj)
 
       var it = inds0(0)
       armValues(it).pull()

@@ -50,14 +50,96 @@ object Utils {
     i - 1
   }
 
-  def argSort(a: Array[Double]): Array[Int] = {
-    a.zipWithIndex.sortBy(_._1).map(_._2)
+  def argMin(a: Vector): Int = {
+    a match {
+      case d: DenseVector =>
+        d.values.zipWithIndex.minBy(_._1)._2
+      case s: SparseVector => throw new UnsupportedOperationException
+    }
+  }
+
+  def argSort(a: Vector): DenseVector = {
+    a match {
+      case d: DenseVector =>
+        new DenseVector(d.values.zipWithIndex.sortBy(_._1).map(_._2.toDouble))
+      case s: SparseVector => throw new UnsupportedOperationException
+    }
   }
 
   def sum(a: Vector): Double = {
     a match {
       case d: DenseVector => d.toArray.sum
       case s: SparseVector => s.values.sum
+    }
+  }
+
+  def sqrt(a: Vector): Unit = {
+    a match {
+      case d: DenseVector =>
+        var i = 0
+        while (i < a.size) {
+          d.values(i) = math.sqrt(d(i))
+          i += 1
+        }
+      case s: SparseVector => throw new UnsupportedOperationException
+    }
+  }
+
+  def log(a: Vector): Unit = {
+    a match {
+      case d: DenseVector =>
+        var i = 0
+        while (i < a.size) {
+          d.values(i) = math.log(d(i))
+          i += 1
+        }
+      case s: SparseVector => throw new UnsupportedOperationException
+    }
+
+  }
+
+  /**
+   * y = y / x
+   */
+  def div(x: Vector, y: Vector): Unit = {
+    y match {
+      case dy: DenseVector =>
+        var i = 0
+        while (i < y.size) {
+          dy.values(i) /= x(i)
+          i += 1
+        }
+      case dy: SparseVector => throw new UnsupportedOperationException
+    }
+  }
+
+  /**
+   * y = y * x
+   */
+  def mul(x: Vector, y: Vector): Unit = {
+    y match {
+      case dy: DenseVector =>
+        var i = 0
+        while (i < y.size) {
+          dy.values(i) *= x(i)
+          i += 1
+        }
+      case dy: SparseVector => throw new UnsupportedOperationException
+    }
+  }
+
+  /**
+   * y = y - x
+   */
+  def sub(x: Vector, y: Vector): Unit = {
+    y match {
+      case dy: DenseVector =>
+        var i = 0
+        while (i < y.size) {
+          dy.values(i) -= x(i)
+          i += 1
+        }
+      case dy: SparseVector => throw new UnsupportedOperationException
     }
   }
 }

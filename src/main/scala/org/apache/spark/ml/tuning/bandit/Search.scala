@@ -147,7 +147,7 @@ class LILUCBSearch extends Search {
       t += 1
     }
 
-    val bestArm = armValues.maxBy(arm => arm.getValidationResult(false))
+    val bestArm = armValues.maxBy(arm => arm.getValidationResult(recompute = false))
     bestArm
   }
 }
@@ -158,45 +158,62 @@ class LUCBSearch extends Search {
     val numArms = arms.size
     val armValues = arms.values.toArray
 
-    val nj = new Array[Double](numArms)
-    val sumj = new Array[Double](numArms)
+    val nj = Vectors.zeros(numArms).asInstanceOf[DenseVector]
+    val sumj = Vectors.zeros(numArms).asInstanceOf[DenseVector]
     for (i <- 0 until numArms) {
       armValues(i).pull()
-      sumj(i) += armValues(i).getResults(true, Some("validation"))(1)
-      nj(i) += 1
+      sumj.values(i) += armValues(i).getValidationResult()
+      nj.values(i) += 1
     }
 
     val delta = 0.1
     var t = numArms
-    val ct = nj.map(x => 1.5 * math.sqrt(0.5 * math.log(math.log(3.0 * x) / delta) / x))
-    val ucbj = sumj.zip(nj).zip(ct).map { case ((sj, j), c) => sj / j - c}
+    val ct = Vectors.zeros(numArms).asInstanceOf[DenseVector]
+    copy(nj, ct)
+    scal(3.0, ct)
+    Utils.log(ct)
+    scal(1.0 / delta, ct)
+    Utils.log(ct)
+    scal(0.5, ct)
+    Utils.div(nj, ct)
+    Utils.sqrt(ct)
+    scal(1.5, ct)
+
+    val ucbj = Vectors.zeros(numArms).asInstanceOf[DenseVector]
+    copy(sumj, ucbj)
+    Utils.div(nj, ucbj)
+    Utils.sub(ct, ucbj)
 
     while (t + 2 <= totalBudgets) {
-      val inds0 = argSort(sumj.zip(nj).map {case (sj, j) => sj / j})
-      val inds1 = argSort(ucbj)
+      val sumjDivNj = Vectors.zeros(numArms).asInstanceOf[DenseVector]
+      copy(sumj, sumjDivNj)
+      Utils.div(nj, sumjDivNj)
+
+      val inds0 = Utils.argSort(sumjDivNj)
+      val inds1 = Utils.argSort(ucbj)
 
       var it = inds0(0)
       armValues(it).pull()
-      sumj(it) += armValues(it).getResults(true, Some("validation"))(1)
-      nj(it) += 1
+      sumj.values(it) += armValues(it).getValidationResult()
+      nj.values(it) += 1
       t += 1
 
       val k1 = 1.25
       val t2nd = math.max(t * t / 4.0, 1.0)
       val t4th = t2nd * t2nd
-      var ct = math.sqrt(0.5 * math.log(k1 * numArms * t4th / delta) / armValues(it).numPulls)
-      ucbj(it) = sumj(it) / nj(it) - ct
+      var ctTmp = math.sqrt(0.5 * math.log(k1 * numArms * t4th / delta) / armValues(it).numPulls)
+      ucbj.values(it) = sumj(it) / nj(it) - ctTmp
 
       it = if (inds1(0) == inds0(0)) inds1(1) else inds1(0)
       armValues(it).pull()
-      sumj(it) += armValues(it).getResults(true, Some("validation"))(1)
-      nj(it) += 1
+      sumj.values(it) += armValues(it).getValidationResult()
+      nj.values(it) += 1
       t += 1
-      ct = math.sqrt(0.5 * math.log(k1 * numArms * t4th / delta) / armValues(it).numPulls)
-      ucbj(it) = sumj(it) / nj(it) - ct
+      ctTmp = math.sqrt(0.5 * math.log(k1 * numArms * t4th / delta) / armValues(it).numPulls)
+      ucbj.values(it) = sumj(it) / nj(it) - ctTmp
     }
 
-    val bestArm = armValues.maxBy(arm => arm.getResults(false, Some("validation"))(1))
+    val bestArm = armValues.maxBy(arm => arm.getValidationResult(recompute = false))
     bestArm
   }
 }

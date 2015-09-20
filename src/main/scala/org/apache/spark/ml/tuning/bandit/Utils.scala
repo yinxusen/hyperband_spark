@@ -58,10 +58,9 @@ object Utils {
     }
   }
 
-  def argSort(a: Vector): DenseVector = {
+  def argSort(a: Vector): Array[Int] = {
     a match {
-      case d: DenseVector =>
-        new DenseVector(d.values.zipWithIndex.sortBy(_._1).map(_._2.toDouble))
+      case d: DenseVector => d.values.zipWithIndex.sortBy(_._1).map(_._2)
       case s: SparseVector => throw new UnsupportedOperationException
     }
   }

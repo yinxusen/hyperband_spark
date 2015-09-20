@@ -42,6 +42,8 @@ object BanditValidatorExample {
 
     val sr = new SuccessiveRejectSearch
 
+    val se = new SuccessiveEliminationSearch
+
     val banditValidator = new BanditValidator()
       .setProblemType("REG")
       .setDatasets(Map("msd" -> "/Users/panda/data/msd_trunc.libsvm"))
@@ -52,7 +54,7 @@ object BanditValidatorExample {
       .setNumTrails(2)
       .setStepsPerPulling(1)
       .setArmFactories(Array(lrrGenerator))
-      .setSearchStrategies(Array(exp3, libucb, lucb, sh, sr))
+      .setSearchStrategies(Array(exp3, libucb, lucb, sh, sr, se))
 
     val conf = new SparkConf()
       .setMaster("local[4]")

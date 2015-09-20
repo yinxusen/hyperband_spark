@@ -21,6 +21,7 @@ import org.apache.spark.mllib.linalg.{DenseVector, Vectors}
 import org.apache.spark.mllib.linalg.BLAS._
 
 import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
 
 case class ArmInfo(dataName: String, numArms: Int, maxIter: Int, trial: Int)
 
@@ -279,6 +280,66 @@ class SuccessiveRejectSearch extends Search {
       }
       armValues = armValues.sortBy(_.getValidationResult()).drop(1)
       prevNk = currNk
+    }
+
+    val bestArm = if (t == totalBudgets) {
+      armValues.maxBy(arm => arm.getValidationResult(recompute = false))
+    } else {
+      while (t < totalBudgets) {
+        armValues(t % armValues.size).pull()
+        t += 1
+      }
+      armValues.maxBy(arm => arm.getValidationResult())
+    }
+
+    bestArm
+  }
+}
+
+class SuccessiveEliminationSearch extends Search {
+  override val name = "successive elimination search"
+  override def search(totalBudgets: Int, arms: Map[(String, String), Arm[_]]): Arm[_] = {
+    val numArms = arms.size
+    val delta = 0.1
+    var armValues = arms.values.toArray
+
+    armValues.foreach(_.pull())
+    var t = numArms
+
+    val maxArmValidationResult = armValues.map(_.getValidationResult()).max
+    val ct = math.sqrt(0.5
+      * math.log(4.0 * numArms * armValues(0).numPulls * armValues(0).numPulls / delta)
+      / armValues(0).numPulls)
+    val armValuesBuilder = new ArrayBuffer[Arm[_]]()
+    var i = 0
+    while (i < armValues.size) {
+      if (maxArmValidationResult - armValues(i).getValidationResult(recompute = false) < ct) {
+        armValuesBuilder += armValues(i)
+      }
+      i += 1
+    }
+    armValues = armValuesBuilder.toArray
+
+    while (2 * t <= totalBudgets) {
+      val numIter = t
+      for (i <- 0 until numIter) {
+        armValues(i % armValues.size).pull()
+        t += 1
+      }
+
+      val maxArmValidationResult = armValues.map(_.getValidationResult()).max
+      val ct = math.sqrt(0.5
+        * math.log(4.0 * numArms * armValues(0).numPulls * armValues(0).numPulls / delta)
+        / armValues(0).numPulls)
+      val armValuesBuilder = new ArrayBuffer[Arm[_]]()
+      var i = 0
+      while (i < armValues.size) {
+        if (maxArmValidationResult - armValues(i).getValidationResult(recompute = false) < ct) {
+          armValuesBuilder += armValues(i)
+        }
+        i += 1
+      }
+      armValues = armValuesBuilder.toArray
     }
 
     val bestArm = if (t == totalBudgets) {

@@ -88,8 +88,9 @@ class LinearRidgeRegression(override val uid: String)
     val currentStep = $(step) + 1
     this.setStep(currentStep)
     val data = dataset.map { case Row(x: Vector, y: Double) => LabeledPoint(y, x)}
-    val weight =
-      LinearRidgeRegression.runSingleStepSGD(data, currentStep, Vectors.zeros($(numOfFeatures)), $(step), $(stepsPerPulling))
+    val weight = LinearRidgeRegression
+      .runSingleStepSGD(
+        data, currentStep, Vectors.zeros($(numOfFeatures)), $(step), $(stepsPerPulling))
     new LinearRidgeRegressionModel(uid, weight, 0)
   }
 
@@ -139,7 +140,7 @@ object LinearRidgeRegression {
       currentWeight: Vector,
       regularizer: Double,
       steps: Int): Vector = {
-    optimizer.setRegParam(regularizer).setCurrentStep(currentStep).optimize(data.map(x => (x.label, x.features)), currentWeight)
-
+    optimizer.setRegParam(regularizer).setCurrentStep(currentStep)
+      .optimize(data.map(x => (x.label, x.features)), currentWeight)
   }
 }

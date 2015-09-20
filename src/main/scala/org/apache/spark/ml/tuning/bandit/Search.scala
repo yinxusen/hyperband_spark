@@ -218,3 +218,38 @@ class LUCBSearch extends Search {
   }
 }
 
+class SuccessiveHalving extends Search {
+  override val name = "successive halving search"
+  override def search(totalBudgets: Int, arms: Map[(String, String), Arm[_]]): Arm[_] = {
+    val numArms = arms.size
+    val numOfHalvingIter = math.ceil(Utils.log2(numArms)).toInt
+
+    var armValues = arms.values.toArray
+    var t = 0
+
+    if ((totalBudgets / (armValues.size * numOfHalvingIter)) > 0) {
+      for (_ <- 0 until numOfHalvingIter) {
+        val numOfCurrentPulling = totalBudgets / (armValues.size * numOfHalvingIter)
+        var i = 0
+        while (i < armValues.size) {
+          for (_ <- 0 until numOfCurrentPulling) {
+            armValues(i).pull()
+            t += 1
+          }
+          i += 1
+        }
+        armValues = armValues.sortBy(_.getValidationResult())
+          .drop(armValues.size - math.ceil(armValues.size / 2.0).toInt)
+      }
+    }
+
+    while (t < totalBudgets) {
+      armValues(t % armValues.size).pull()
+      t += 1
+    }
+
+    val bestArm = armValues.maxBy(arm => arm.getValidationResult())
+    bestArm
+  }
+}
+

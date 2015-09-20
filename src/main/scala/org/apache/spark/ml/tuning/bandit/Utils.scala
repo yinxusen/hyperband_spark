@@ -141,6 +141,15 @@ object Utils {
       case dy: SparseVector => throw new UnsupportedOperationException
     }
   }
+
+  /**
+   * Base 2 logarithm.
+   */
+  def log2(n: Double): Double = {
+    if (n <= 0) throw new IllegalArgumentException()
+    // TODO find more stable method?
+    math.log(n) / math.log(2)
+  }
 }
 
 /**

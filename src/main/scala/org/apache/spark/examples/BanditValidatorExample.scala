@@ -34,17 +34,19 @@ object BanditValidatorExample {
 
     val exp3 = new ExponentialWeightsSearch
 
+    val libucb = new LILUCBSearch
+
     val banditValidator = new BanditValidator()
       .setProblemType("REG")
       .setDatasets(Map("msd" -> "/Users/panda/data/msd_trunc.libsvm"))
-      .setComputeHistory(true)
-      .setExpectedIters(Array(2))
-      .setNumArmsList(Array(10))
+      .setComputeHistory(false)
+      .setExpectedIters(Array(10))
+      .setNumArmsList(Array(20))
       .setSeed(1066)
       .setNumTrails(2)
       .setStepsPerPulling(1)
       .setArmFactories(Array(lrrGenerator))
-      .setSearchStrategies(Array(staticSearch, simpleSearch, exp3))
+      .setSearchStrategies(Array(staticSearch, simpleSearch, exp3, libucb))
 
     val conf = new SparkConf()
       .setMaster("local[4]")

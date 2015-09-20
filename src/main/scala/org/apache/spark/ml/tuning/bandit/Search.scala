@@ -33,7 +33,7 @@ abstract class Search {
 }
 
 class StaticSearch extends Search {
-  override val name: String = "static search"
+  override val name = "static search"
   override def search(totalBudgets: Int, arms: Map[(String, String), Arm[_]]): Arm[_] = {
 
     assert(arms.keys.size != 0, "ERROR: No arms!")
@@ -51,7 +51,7 @@ class StaticSearch extends Search {
 }
 
 class SimpleBanditSearch extends Search {
-  override val name: String = "simple bandit search"
+  override val name = "simple bandit search"
   override def search(totalBudgets: Int, arms: Map[(String, String), Arm[_]]): Arm[_] = {
     val numArms = arms.size
     val alpha = 0.3
@@ -80,7 +80,7 @@ class SimpleBanditSearch extends Search {
 }
 
 class ExponentialWeightsSearch extends Search {
-  override val name: String = "exponential weight search"
+  override val name = "exponential weight search"
   override def search(totalBudgets: Int, arms: Map[(String, String), Arm[_]]): Arm[_] = {
     val numArms = arms.size
     val armValues = arms.values.toArray
@@ -97,6 +97,40 @@ class ExponentialWeightsSearch extends Search {
       wt(it) = math.exp(- eta * lt(it))
     }
     val bestArm = armValues.maxBy(arm => arm.getResults(true, Some("validation"))(1))
+    bestArm
+  }
+}
+
+class LILUCBSearch extends Search {
+  override val name = "law of iterated logarithm upper confidence bound search"
+  override def search(totalBudgets: Int, arms: Map[(String, String), Arm[_]]): Arm[_] = {
+    val numArms = arms.size
+    val armValues = arms.values.toArray
+
+    val nj = new Array[Double](numArms)
+    val sumj = new Array[Double](numArms)
+    for (i <- 0 until numArms) {
+      armValues(i).pull()
+      sumj(i) += armValues(i).getResults(true, Some("validation"))(1)
+      nj(i) += 1
+    }
+
+    val delta = 0.1
+    var t = numArms
+    val ct = nj.map(x => 1.5 * math.sqrt(0.5 * math.log(5.0 * math.log(3.0 * x) / delta) / x))
+    val ucbj = sumj.zip(nj).zip(ct).map { case ((sj, j), c) => sj / j - c}
+
+    while (t < totalBudgets) {
+      val it = ucbj.zipWithIndex.minBy(_._1)._2
+      armValues(it).pull()
+      sumj(it) += armValues(it).getResults(true, Some("validation"))(1)
+      nj(it) += 1
+      ct(it) = 1.5 * math.sqrt(0.5 * math.log(5.0 * math.log(3.0 * nj(it)) / delta) / nj(it))
+      ucbj(it) = sumj(it) / nj(it) - ct(it)
+      t += 1
+    }
+
+    val bestArm = armValues.maxBy(arm => arm.getResults(false, Some("validation"))(1))
     bestArm
   }
 }

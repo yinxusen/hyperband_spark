@@ -38,7 +38,9 @@ object BanditValidatorExample {
 
     val lucb = new LUCBSearch
 
-    val sh = new SuccessiveHalving
+    val sh = new SuccessiveHalvingSearch
+
+    val sr = new SuccessiveRejectSearch
 
     val banditValidator = new BanditValidator()
       .setProblemType("REG")
@@ -50,7 +52,7 @@ object BanditValidatorExample {
       .setNumTrails(2)
       .setStepsPerPulling(1)
       .setArmFactories(Array(lrrGenerator))
-      .setSearchStrategies(Array(exp3, libucb, lucb, sh))
+      .setSearchStrategies(Array(exp3, libucb, lucb, sh, sr))
 
     val conf = new SparkConf()
       .setMaster("local[4]")

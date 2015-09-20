@@ -218,7 +218,7 @@ class LUCBSearch extends Search {
   }
 }
 
-class SuccessiveHalving extends Search {
+class SuccessiveHalvingSearch extends Search {
   override val name = "successive halving search"
   override def search(totalBudgets: Int, arms: Map[(String, String), Arm[_]]): Arm[_] = {
     val numArms = arms.size
@@ -243,13 +243,54 @@ class SuccessiveHalving extends Search {
       }
     }
 
-    while (t < totalBudgets) {
-      armValues(t % armValues.size).pull()
-      t += 1
+    val bestArm = if (t == totalBudgets) {
+      armValues.maxBy(arm => arm.getValidationResult(recompute = false))
+    } else {
+      while (t < totalBudgets) {
+        armValues(t % armValues.size).pull()
+        t += 1
+      }
+      armValues.maxBy(arm => arm.getValidationResult())
     }
 
-    val bestArm = armValues.maxBy(arm => arm.getValidationResult())
     bestArm
   }
 }
 
+class SuccessiveRejectSearch extends Search {
+  override val name = "successive reject search"
+  override def search(totalBudgets: Int, arms: Map[(String, String), Arm[_]]): Arm[_] = {
+    val numArms = arms.size
+    var armValues = arms.values.toArray
+    val barLogOfNumArms = 0.5 + (2 to numArms).map(i => 1.0 / i).sum
+
+    var prevNk = 0
+    var t = 0
+    for (k <- 1 until numArms) {
+      val currNk = math.ceil((totalBudgets - numArms) / ((numArms + 1 - k) * barLogOfNumArms)).toInt
+      val numOfCurrentPulling = currNk - prevNk
+      var i = 0
+      while (i < armValues.size) {
+        for (_ <- 0 until numOfCurrentPulling) {
+          armValues(i).pull()
+          t += 1
+        }
+        i += 1
+      }
+      armValues = armValues.sortBy(_.getValidationResult()).drop(1)
+      prevNk = currNk
+    }
+
+    val bestArm = if (t == totalBudgets) {
+      armValues.maxBy(arm => arm.getValidationResult(recompute = false))
+    } else {
+      while (t < totalBudgets) {
+        armValues(t % armValues.size).pull()
+        t += 1
+      }
+      armValues.maxBy(arm => arm.getValidationResult())
+    }
+
+    bestArm
+  }
+}

@@ -24,13 +24,13 @@ import org.apache.spark.mllib.linalg.{Vector, Vectors}
 import org.apache.spark.mllib.optimization.{Gradient, Optimizer, Updater}
 import org.apache.spark.rdd.RDD
 
-
 /**
  * Class used to solve an optimization problem using Gradient Descent.
  * @param gradient Gradient function to be used.
  * @param updater Updater to be used to update weights after every iteration.
  */
-class GradientDescentOptimizer (private var gradient: Gradient, private var updater: Updater) extends Optimizer with Logging {
+class GradientDescentOptimizer (private var gradient: Gradient, private var updater: Updater)
+  extends Optimizer with Logging {
 
   private var stepSize: Double = 1.0
   private var regParam: Double = 0.0

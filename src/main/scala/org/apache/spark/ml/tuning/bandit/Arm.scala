@@ -110,7 +110,7 @@ class Arm[M <: Model[M]](
         if (this.history.iterations.size == 0 ||
           this.numPulls > valXArrayBuffer.last * this.history.alpha) {
           valXArrayBuffer.append(this.numPulls)
-          val error = this.getResults(true, Some("validation"))(1)
+          val error = this.getValidationResult()
           valYArrayBuffer.append(error)
         }
       }
@@ -151,11 +151,20 @@ class Arm[M <: Model[M]](
     this.results
   }
 
+  /**
+   * Evaluate and get the training result.
+   */
   def getTrainResult(recompute: Boolean = true): Double = getResults(recompute, Some("train"))(0)
 
+  /**
+   * Evaluate and get the validation result.
+   */
   def getValidationResult(recompute: Boolean = true): Double =
     getResults(recompute, Some("validation"))(1)
 
+  /**
+   * Evaluate and get the test result.
+   */
   def getTestResult(recompute: Boolean = true): Double = getResults(recompute, Some("test"))(2)
 }
 

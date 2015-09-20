@@ -37,7 +37,7 @@ abstract class ArmFactory(val name: String, val paramList: Array[ParamSampler[_]
       hp: ParamMap,
       arms: mutable.Map[(String, String), Arms.ArmExistential],
       arm: Arms.ArmExistential): Unit = {
-    arms += (this.name, hp.toString) -> arm
+    arms += (this.name, hp.toString()) -> arm
   }
 
   def createArms(
@@ -75,6 +75,7 @@ class LinearRidgeRegressionArmFactory(
       .setStepsPerPulling(1)
       .copy(params)
 
+    // TODO RMSE implemented in ML package is negative to original one, fix it to original one.
     val evaluator = new RegressionEvaluator().setMetricName("rmse")
 
     new Arm[LinearRidgeRegressionModel](

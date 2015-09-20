@@ -183,8 +183,8 @@ class BanditValidator(override val uid: String)
   /** @group setParam */
   def setMaxIter(value: Int): this.type = set(maxIter, value)
 
-  // TODO
-  override def fit(dataset: DataFrame): BanditValidatorModel = ???
+  override def fit(dataset: DataFrame): BanditValidatorModel =
+    throw new UnsupportedOperationException
 
   def fit(sqlCtx: SQLContext) = {
     val results = $(datasets).flatMap { case (dataName, fileName) =>
@@ -213,7 +213,7 @@ class BanditValidator(override val uid: String)
             val arms = armsAllocator.allocate(numArms)
             val bestArm = searchStrategy.search(expectedNumItersPerArm * numArms, arms)
             ((searchStrategy.name, dataName, numArms, expectedNumItersPerArm),
-              bestArm.getResults(false, None))
+              bestArm.getResults(recompute = false, None))
           }
         }
       }

@@ -19,6 +19,7 @@ package org.apache.spark.ml.tuning.bandit
 
 import org.apache.spark.rdd.{PartitionwiseSampledRDD, RDD}
 import org.apache.spark.util.random.BernoulliCellSampler
+import org.apache.spark.mllib.linalg.{SparseVector, DenseVector, Vector}
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -37,8 +38,9 @@ object Utils {
    * Randomly choose one sample given a frequency histogram. The higher the frequency of one
    * element, the easier the element be chose.
    */
-  def chooseOne(p: Array[Double]): Int = {
-    val threshold = Random.nextDouble() * p.sum
+  def chooseOne(p: Vector): Int = {
+    // TODO Optimize it to suitable for Sparse Vector too.
+    val threshold = Random.nextDouble() * Utils.sum(p)
     var i = 0
     var sum = 0.0
     while ((sum < threshold) && (i < p.size)) {
@@ -50,6 +52,13 @@ object Utils {
 
   def argSort(a: Array[Double]): Array[Int] = {
     a.zipWithIndex.sortBy(_._1).map(_._2)
+  }
+
+  def sum(a: Vector): Double = {
+    a match {
+      case d: DenseVector => d.toArray.sum
+      case s: SparseVector => s.values.sum
+    }
   }
 }
 

@@ -150,6 +150,13 @@ class Arm[M <: Model[M]](
     }
     this.results
   }
+
+  def getTrainResult(recompute: Boolean = true): Double = getResults(recompute, Some("train"))(0)
+
+  def getValidationResult(recompute: Boolean = true): Double =
+    getResults(recompute, Some("validation"))(1)
+
+  def getTestResult(recompute: Boolean = true): Double = getResults(recompute, Some("test"))(2)
 }
 
 object Arms {

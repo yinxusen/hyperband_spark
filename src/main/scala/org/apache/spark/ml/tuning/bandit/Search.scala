@@ -17,6 +17,9 @@
 
 package org.apache.spark.ml.tuning.bandit
 
+import org.apache.spark.mllib.linalg.{DenseVector, Vectors}
+import org.apache.spark.mllib.linalg.BLAS._
+
 import scala.collection.mutable
 
 case class ArmInfo(dataName: String, numArms: Int, maxIter: Int, trial: Int)
@@ -45,7 +48,7 @@ class StaticSearch extends Search {
       i += 1
     }
 
-    val bestArm = armValues.maxBy(arm => arm.getResults(true, Some("validation"))(1))
+    val bestArm = armValues.maxBy(arm => arm.getValidationResult())
     bestArm
   }
 }
@@ -66,7 +69,7 @@ class SimpleBanditSearch extends Search {
     var currentBudget = initialRounds * numArms
     val numPreSelectedArms = math.max(1, (alpha * numArms).toInt)
 
-    val preSelectedArms = armValues.sortBy(_.getResults(true, Some("validation"))(1))
+    val preSelectedArms = armValues.sortBy(_.getValidationResult())
       .reverse.dropRight(numArms - numPreSelectedArms)
 
     while (currentBudget < totalBudgets) {
@@ -74,7 +77,7 @@ class SimpleBanditSearch extends Search {
       currentBudget += 1
     }
 
-    val bestArm = preSelectedArms.maxBy(arm => arm.getResults(true, Some("validation"))(1))
+    val bestArm = preSelectedArms.maxBy(arm => arm.getValidationResult())
     bestArm
   }
 }
@@ -86,17 +89,18 @@ class ExponentialWeightsSearch extends Search {
     val armValues = arms.values.toArray
     val eta = math.sqrt(2 * math.log(numArms) / (numArms * totalBudgets))
 
-    val lt = new Array[Double](numArms)
-    val wt = lt.map(x => math.exp(- eta * x))
+    val lt = Vectors.zeros(numArms).asInstanceOf[DenseVector]
+    val wt = Vectors.dense(Array.fill(numArms)(1.0)).asInstanceOf[DenseVector]
     for (t <- 0 until totalBudgets) {
-      val pt = wt.map(x => x / wt.sum)
+      val pt = Vectors.zeros(numArms)
+      axpy(Utils.sum(wt), wt, pt)
       val it = if (t < numArms) t else Utils.chooseOne(pt)
       val arm = armValues(it)
       arm.pull()
-      lt(it) += arm.getResults(true, Some("validation"))(1)
-      wt(it) = math.exp(- eta * lt(it))
+      lt.values(it) += arm.getValidationResult()
+      wt.values(it) = math.exp(- eta * lt(it))
     }
-    val bestArm = armValues.maxBy(arm => arm.getResults(true, Some("validation"))(1))
+    val bestArm = armValues.maxBy(arm => arm.getValidationResult())
     bestArm
   }
 }

@@ -48,7 +48,7 @@ object BanditValidatorExample {
       .setNumTrails(2)
       .setStepsPerPulling(1)
       .setArmFactories(Array(lrrGenerator))
-      .setSearchStrategies(Array(staticSearch, simpleSearch, exp3, libucb, lucb))
+      .setSearchStrategies(Array(exp3))
 
     val conf = new SparkConf()
       .setMaster("local[4]")

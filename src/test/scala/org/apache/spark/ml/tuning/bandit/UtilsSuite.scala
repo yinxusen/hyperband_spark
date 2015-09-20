@@ -19,7 +19,7 @@ class UtilsSuite extends FunSuite with BanditTestContext {
 
   test("Randomly choose one") {
     val dist = (0 until 100).toArray.map(_ => Random.nextDouble())
-    val selected = sc.parallelize(0 until 1000000).map(_ => Utils.chooseOne(dist))
+    val selected = sc.parallelize(0 until 1000000).map(_ => Utils.chooseOne(Vectors.dense(dist)))
 
 
 

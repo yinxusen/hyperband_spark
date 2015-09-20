@@ -47,6 +47,10 @@ object Utils {
     }
     i - 1
   }
+
+  def argSort(a: Array[Double]): Array[Int] = {
+    a.zipWithIndex.sortBy(_._1).map(_._2)
+  }
 }
 
 /**

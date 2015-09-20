@@ -135,3 +135,52 @@ class LILUCBSearch extends Search {
   }
 }
 
+class LUCBSearch extends Search {
+  override val name = "LUCB search"
+  override def search(totalBudgets: Int, arms: Map[(String, String), Arm[_]]): Arm[_] = {
+    val numArms = arms.size
+    val armValues = arms.values.toArray
+
+    val nj = new Array[Double](numArms)
+    val sumj = new Array[Double](numArms)
+    for (i <- 0 until numArms) {
+      armValues(i).pull()
+      sumj(i) += armValues(i).getResults(true, Some("validation"))(1)
+      nj(i) += 1
+    }
+
+    val delta = 0.1
+    var t = numArms
+    val ct = nj.map(x => 1.5 * math.sqrt(0.5 * math.log(math.log(3.0 * x) / delta) / x))
+    val ucbj = sumj.zip(nj).zip(ct).map { case ((sj, j), c) => sj / j - c}
+
+    while (t + 2 <= totalBudgets) {
+      val inds0 = Utils.argSort(sumj.zip(nj).map {case (sj, j) => sj / j})
+      val inds1 = Utils.argSort(ucbj)
+
+      var it = inds0(0)
+      armValues(it).pull()
+      sumj(it) += armValues(it).getResults(true, Some("validation"))(1)
+      nj(it) += 1
+      t += 1
+
+      val k1 = 1.25
+      val t2nd = math.max(t * t / 4.0, 1.0)
+      val t4th = t2nd * t2nd
+      var ct = math.sqrt(0.5 * math.log(k1 * numArms * t4th / delta) / armValues(it).numPulls)
+      ucbj(it) = sumj(it) / nj(it) - ct
+
+      it = if (inds1(0) == inds0(0)) inds1(1) else inds1(0)
+      armValues(it).pull()
+      sumj(it) += armValues(it).getResults(true, Some("validation"))(1)
+      nj(it) += 1
+      t += 1
+      ct = math.sqrt(0.5 * math.log(k1 * numArms * t4th / delta) / armValues(it).numPulls)
+      ucbj(it) = sumj(it) / nj(it) - ct
+    }
+
+    val bestArm = armValues.maxBy(arm => arm.getResults(false, Some("validation"))(1))
+    bestArm
+  }
+}
+

@@ -36,6 +36,8 @@ object BanditValidatorExample {
 
     val libucb = new LILUCBSearch
 
+    val lucb = new LUCBSearch
+
     val banditValidator = new BanditValidator()
       .setProblemType("REG")
       .setDatasets(Map("msd" -> "/Users/panda/data/msd_trunc.libsvm"))
@@ -46,7 +48,7 @@ object BanditValidatorExample {
       .setNumTrails(2)
       .setStepsPerPulling(1)
       .setArmFactories(Array(lrrGenerator))
-      .setSearchStrategies(Array(staticSearch, simpleSearch, exp3, libucb))
+      .setSearchStrategies(Array(staticSearch, simpleSearch, exp3, libucb, lucb))
 
     val conf = new SparkConf()
       .setMaster("local[4]")

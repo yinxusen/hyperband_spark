@@ -17,7 +17,6 @@
 
 package org.apache.spark.ml.tuning.bandit
 
-import org.apache.spark.examples.BanditValidatorExample
 import org.apache.spark.ml.param.shared.{HasFeaturesCol, HasLabelCol, HasOutputCol}
 import org.apache.spark.ml.param.{DoubleParam, IntParam, ParamMap, Params}
 import org.apache.spark.ml.regression.RegressionModel

@@ -94,7 +94,6 @@ object Utils {
         }
       case s: SparseVector => throw new UnsupportedOperationException
     }
-
   }
 
   /**

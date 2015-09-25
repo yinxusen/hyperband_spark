@@ -17,6 +17,7 @@
 
 package org.apache.spark.ml.tuning.bandit
 
+import org.apache.spark.examples.BanditValidatorExample
 import org.apache.spark.ml.param.shared.{HasFeaturesCol, HasLabelCol, HasOutputCol}
 import org.apache.spark.ml.param.{DoubleParam, IntParam, ParamMap, Params}
 import org.apache.spark.ml.regression.RegressionModel
@@ -28,6 +29,8 @@ import org.apache.spark.mllib.regression.LabeledPoint
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.types.{DoubleType, StructType}
 import org.apache.spark.sql.{DataFrame, Row}
+
+import scala.util.Random
 
 trait LinearRidgeRegressionParam
   extends Params with HasFeaturesCol with HasLabelCol with HasOutputCol with HasStepControl {
@@ -87,10 +90,10 @@ class LinearRidgeRegression(override val uid: String)
   override def fit(dataset: DataFrame): LinearRidgeRegressionModel = {
     val currentStep = $(step) + 1
     this.setStep(currentStep)
-    val data = dataset.map { case Row(x: Vector, y: Double) => LabeledPoint(y, x)}
+    val data = dataset.map { case Row(x: Vector, y: Double) => LabeledPoint(y, x) }
     val weight = LinearRidgeRegression
       .runSingleStepSGD(
-        data, currentStep, Vectors.zeros($(numOfFeatures)), $(step), $(stepsPerPulling))
+        data, currentStep, LinearRidgeRegression.randomVector($(numOfFeatures)), $(step), $(stepsPerPulling))
     new LinearRidgeRegressionModel(uid, weight, 0)
   }
 
@@ -142,5 +145,9 @@ object LinearRidgeRegression {
       steps: Int): Vector = {
     optimizer.setRegParam(regularizer).setCurrentStep(currentStep)
       .optimize(data.map(x => (x.label, x.features)), currentWeight)
+  }
+
+  def randomVector(numOfFeatures: Int): Vector = {
+    Vectors.dense(Array.tabulate[Double](numOfFeatures)(i => Random.nextDouble()))
   }
 }

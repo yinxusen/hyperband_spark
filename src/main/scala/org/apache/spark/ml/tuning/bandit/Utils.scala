@@ -167,6 +167,8 @@ class ArmsAllocator(val allArms: Map[(String, String), Arms.ArmExistential]) {
     val arms = new mutable.HashMap[(String, String), Arms.ArmExistential]()
     var i = 0
     while (i < math.min(numArms, usedArms.size)) {
+      // TODO The reset method only resets arm's attributes, but not the estimator's attributes.
+      allArms(usedArms(i)).reset()
       arms += usedArms(i) -> allArms(usedArms(i))
       i += 1
     }

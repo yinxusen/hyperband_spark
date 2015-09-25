@@ -189,13 +189,17 @@ class BanditValidator(override val uid: String)
   def fit(sqlCtx: SQLContext) = {
     val results = $(datasets).flatMap { case (dataName, fileName) =>
       val data = ClassifyDataset.scaleAndPartitionData(sqlCtx, dataName, fileName)
+
+      /*
       val allArms = Arms.generateArms($(armFactories), data, $(numArmsList).max).mapValues { arm =>
         arm.history.doCompute = $(computeHistory)
         arm
       }
+      */
 
-      val armsAllocator = new ArmsAllocator(allArms)
+      // val armsAllocator = new ArmsAllocator(allArms)
 
+      /*
       if ($(computeHistory)) {
         for ((armInfo, arm) <- allArms) {
           arm.train($(maxIter))
@@ -204,16 +208,21 @@ class BanditValidator(override val uid: String)
           println(arm.history.errors.mkString(", "))
         }
       }
+      */
 
       $(numArmsList).flatMap { case numArmsPerParameter =>
         val numArms = $(armFactories)
           .map(modelFamily => math.pow(numArmsPerParameter, modelFamily.paramList.size)).sum.toInt
         $(expectedIters).zipWithIndex.flatMap { case (expectedNumItersPerArm, idx) =>
           $(searchStrategies).map { case searchStrategy =>
-            val arms = armsAllocator.allocate(numArms)
+            val arms = Arms.generateArms($(armFactories), data, numArms).mapValues { arm =>
+              arm.history.doCompute = $(computeHistory)
+              arm
+            }
+            // val arms = armsAllocator.allocate(numArms)
             val bestArm = searchStrategy.search(expectedNumItersPerArm * numArms, arms)
             ((searchStrategy.name, dataName, numArms, expectedNumItersPerArm),
-              bestArm.getResults(recompute = false, None))
+              bestArm.getResults())
           }
         }
       }

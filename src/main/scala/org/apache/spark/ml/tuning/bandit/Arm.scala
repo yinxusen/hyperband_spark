@@ -92,6 +92,7 @@ class Arm[M <: Model[M]](
       this.estimator.fit(data.trainingSet, model.get)
     }
     this.model = Some(partialModel)
+    println(s"Arm ${this.name}, iteration ${this.numPulls}, validation ${this.getValidationResult()}")
     this
   }
 

@@ -79,6 +79,9 @@ class LinearRidgeRegressionArmFactory(
     val evaluator = new RegressionEvaluator().setMetricName("rmse")
 
     new Arm[LinearRidgeRegressionModel](
-      initData, "linear ridge regression", linearRidgeRegression, evaluator)
+      initData,
+      s"linear ridge regression # ${System.currentTimeMillis()}",
+      linearRidgeRegression,
+      evaluator)
   }
 }

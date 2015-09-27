@@ -153,7 +153,8 @@ object GradientDescentOptimizer extends Logging {
     val n = weights.size
 
     val bcWeights = data.context.broadcast(weights)
-    val (gradientSum, lossSum, miniBatchSize) = data.sample(false, miniBatchFraction, 42 + currentStep)
+    val (gradientSum, lossSum, miniBatchSize) = data
+      .sample(false, miniBatchFraction, 42 + currentStep)
       .treeAggregate((BDV.zeros[Double](n), 0.0, 0L))(
         seqOp = (c, v) => {
           // c: (grad, loss, count), v: (label, features)

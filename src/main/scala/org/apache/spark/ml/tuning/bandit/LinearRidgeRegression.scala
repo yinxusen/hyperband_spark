@@ -92,7 +92,11 @@ class LinearRidgeRegression(override val uid: String)
     val data = dataset.map { case Row(x: Vector, y: Double) => LabeledPoint(y, x) }
     val weight = LinearRidgeRegression
       .runSingleStepSGD(
-        data, currentStep, LinearRidgeRegression.randomVector($(numOfFeatures)), $(step), $(stepsPerPulling))
+        data,
+        currentStep,
+        LinearRidgeRegression.randomVector($(numOfFeatures)),
+        $(step),
+        $(stepsPerPulling))
     new LinearRidgeRegressionModel(uid, weight, 0)
   }
 

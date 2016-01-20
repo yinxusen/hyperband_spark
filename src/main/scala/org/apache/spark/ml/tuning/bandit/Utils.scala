@@ -17,23 +17,11 @@
 
 package org.apache.spark.ml.tuning.bandit
 
-import org.apache.spark.rdd.{PartitionwiseSampledRDD, RDD}
-import org.apache.spark.util.random.BernoulliCellSampler
-import org.apache.spark.mllib.linalg.{SparseVector, DenseVector, Vector}
-
-import scala.collection.mutable
-import scala.collection.mutable.ArrayBuffer
-import scala.reflect.ClassTag
 import scala.util.Random
 
-object Utils {
-  def splitTrainTest[T: ClassTag](rdd: RDD[T], testFraction: Double, seed: Int): (RDD[T], RDD[T]) = {
-    val sampler = new BernoulliCellSampler[T](0, testFraction, complement = false)
-    val test = new PartitionwiseSampledRDD(rdd, sampler, true, seed)
-    val training = new PartitionwiseSampledRDD(rdd, sampler.cloneComplement(), true, seed)
-    (training, test)
-  }
+import org.apache.spark.mllib.linalg.{DenseVector, SparseVector, Vector}
 
+object Utils {
   /**
    * Randomly choose one sample given a frequency histogram. The higher the frequency of one
    * element, the easier the element be chose.
@@ -148,35 +136,5 @@ object Utils {
     if (n <= 0) throw new IllegalArgumentException()
     // TODO find more stable method?
     math.log(n) / math.log(2)
-  }
-}
-
-/**
- * Allocate an array of pre-generated arms for a [SearchStrategy].
- */
-class ArmsAllocator(val allArms: Map[(String, String), Arms.ArmExistential]) {
-  val usedArms = new ArrayBuffer[(String, String)]()
-  val unusedArms = new ArrayBuffer[(String, String)]()
-  unusedArms.appendAll(allArms.keys)
-  val arms = new mutable.HashMap[(String, String), Arms.ArmExistential]()
-
-  def allocate(numArms: Int): Map[(String, String), Arms.ArmExistential] = {
-    assert(numArms <= allArms.size,
-      s"Required $numArms arms exceed the total amount ${allArms.size}.")
-    val arms = new mutable.HashMap[(String, String), Arms.ArmExistential]()
-    var i = 0
-    while (i < math.min(numArms, usedArms.size)) {
-      // TODO The reset method only resets arm's attributes, but not the estimator's attributes.
-      allArms(usedArms(i)).reset()
-      arms += usedArms(i) -> allArms(usedArms(i))
-      i += 1
-    }
-    while (i < numArms) {
-      val armInfo = unusedArms.remove(0)
-      arms += armInfo -> allArms(armInfo)
-      usedArms.append(armInfo)
-      i += 1
-    }
-    arms.toMap.mapValues(_.reset())
   }
 }

@@ -17,77 +17,80 @@
 
 package org.apache.spark.ml.tuning.bandit
 
-import org.apache.spark.mllib.linalg.{DenseVector, Vectors}
-import org.apache.spark.mllib.linalg.BLAS._
-
-import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
-case class ArmInfo(dataName: String, numArms: Int, maxIter: Int, trial: Int)
+import org.apache.spark.ml.Model
+import org.apache.spark.mllib.linalg.BLAS._
+import org.apache.spark.mllib.linalg.{DenseVector, Vectors}
+import org.apache.spark.sql.DataFrame
 
 abstract class Search {
-  val name: String
-  val results = new mutable.HashMap[ArmInfo, Array[Arm[_]]]()
-
-  def appendResults(armInfo: ArmInfo, arms: Array[Arm[_]]) = {
-    results(armInfo) = arms
-  }
-
-  def search(totalBudgets: Int, arms: Map[(String, String), Arm[_]]): Arm[_]
+  def search(
+      totalBudgets: Int,
+      arms: Array[Arm],
+      trainingData: DataFrame,
+      validationData: DataFrame,
+      isLargerBetter: Boolean = true,
+      needRecord: Boolean = false): Arm
 }
 
+/**
+ * A naive search strategy that pulling arms in a round robin style. The static search is exactly
+ * the same with Cross Validation, so we can compare other methods with this one.
+ */
 class StaticSearch extends Search {
-  override val name = "static search"
-  override def search(totalBudgets: Int, arms: Map[(String, String), Arm[_]]): Arm[_] = {
 
-    assert(arms.keys.size != 0, "ERROR: No arms!")
-    val armValues = arms.values.toArray
-    val numArms = arms.keys.size
+  override def search(
+      totalBudgets: Int,
+      arms: Array[Arm],
+      trainingData: DataFrame,
+      validationData: DataFrame,
+      isLargerBetter: Boolean = true,
+      needRecord: Boolean = false): Arm = {
+
+    assert(arms.length != 0, "ERROR: No arms!")
+    val numArms = arms.length
     var i = 0
     while (i  < totalBudgets) {
-      armValues(i % numArms).pull()
+      arms(i % numArms).pull(trainingData, i, Some(validationData), record = needRecord)
       i += 1
     }
 
-    val bestArm = armValues.maxBy(arm => arm.getValidationResult())
+    val bestArm = if (isLargerBetter) {
+      arms.maxBy(arm => arm.getValidationResult(validationData))
+    } else {
+      arms.minBy(arm => arm.getValidationResult(validationData))
+    }
     bestArm
   }
 }
 
-class SimpleBanditSearch extends Search {
-  override val name = "simple bandit search"
-  override def search(totalBudgets: Int, arms: Map[(String, String), Arm[_]]): Arm[_] = {
-    val numArms = arms.size
-    val alpha = 0.3
-    val initialRounds = math.max(1, (alpha * totalBudgets / numArms).toInt)
 
-    val armValues = arms.values.toArray
 
-    for (i <- 0 until initialRounds) {
-      armValues.foreach(_.pull())
-    }
-
-    var currentBudget = initialRounds * numArms
-    val numPreSelectedArms = math.max(1, (alpha * numArms).toInt)
-
-    val preSelectedArms = armValues.sortBy(_.getValidationResult())
-      .reverse.dropRight(numArms - numPreSelectedArms)
-
-    while (currentBudget < totalBudgets) {
-      preSelectedArms(currentBudget % numPreSelectedArms).pull()
-      currentBudget += 1
-    }
-
-    val bestArm = preSelectedArms.maxBy(arm => arm.getValidationResult())
-    bestArm
-  }
-}
-
+/**
+ * Exponential weight search first gives us a uniform distribution. Then it samples from the
+ * distribution, and accumulates the estimated loss for the selected arm. As a consequence, the arm
+ * with less accumulated estimated loss will have more chance to be selected to run in the next
+ * iteration. However, if an arm is much more lucky than others, i.e. be selected more times, then
+ * it tends to reduce the weight to be selected in the next iteration, for the accumulating behavior
+ * in the strategy. So it gives us the chance to try other arms.
+ * Please refer to the *Regret Analysis of Stochastic and Nonstochastic Multi-armed Bandit Problems*
+ * Chapter 3, written by Sebastien Bubeck and Nicolo Cesa-Bianchi.
+ */
 class ExponentialWeightsSearch extends Search {
-  override val name = "exponential weight search"
-  override def search(totalBudgets: Int, arms: Map[(String, String), Arm[_]]): Arm[_] = {
-    val numArms = arms.size
-    val armValues = arms.values.toArray
+  override def search(
+      totalBudgets: Int,
+      arms: Array[Arm],
+      trainingData: DataFrame,
+      validationData: DataFrame,
+      isLargerBetter: Boolean = true,
+      needRecord: Boolean = false): Arm = {
+
+    if (!isLargerBetter) {
+      throw new UnsupportedOperationException("Unsupported OP fow now.")
+    }
+
+    val numArms = arms.length
     val eta = math.sqrt(2 * math.log(numArms) / (numArms * totalBudgets))
 
     val lt = Vectors.zeros(numArms).asInstanceOf[DenseVector]
@@ -96,27 +99,86 @@ class ExponentialWeightsSearch extends Search {
       val pt = Vectors.zeros(numArms)
       axpy(Utils.sum(wt), wt, pt)
       val it = if (t < numArms) t else Utils.chooseOne(pt)
-      val arm = armValues(it)
-      arm.pull()
-      lt.values(it) += arm.getValidationResult()
-      wt.values(it) = math.exp(- eta * lt(it))
+      val arm = arms(it)
+      arm.pull(trainingData, t, Some(validationData), record = needRecord)
+      lt.values(it) += arm.getValidationResult(validationData)
+      // We use `1.0 / lt(it)` instead of `lt(it)` in the original paper, for the reason that the
+      // paper uses loss, which the `isLargerBetter` is false. Here our `isLargeBetter` is true.
+      // Note: Be careful with potential NaN here.
+      wt.values(it) = math.exp(- eta * 1.0 / lt(it))
     }
-    val bestArm = armValues.maxBy(arm => arm.getValidationResult())
+    val bestArm = arms.maxBy(arm => arm.getValidationResult(validationData))
     bestArm
   }
 }
 
+/*
+/**
+ * Naive search strategy runs several rounds as initial rounds. In initial rounds, the naive
+ * search is the same with static search. After the initial rounds, the naive search selects
+ * the top-n best arms, then does another static search in those selected arms.
+ */
+class NaiveSearch extends Search {
+  override def search[M <: Model[M]](
+      totalBudgets: Int,
+      arms: Array[Arm[M]],
+      trainingData: DataFrame,
+      validationData: DataFrame,
+      isLargerBetter: Boolean = true,
+      needRecord: Boolean = false): Arm[M] = {
+
+    if (!isLargerBetter) {
+      throw new UnsupportedOperationException("Unsupported OP fow now.")
+    }
+
+    val numArms = arms.length
+    val alpha = 0.3
+    val initialRounds = math.max(1, (alpha * totalBudgets / numArms).toInt)
+
+    for (i <- 0 until initialRounds) {
+      arms.foreach(_.pull(trainingData, i, Some(validationData), record = needRecord))
+    }
+
+    var currentBudget = initialRounds * numArms
+    val numPreSelectedArms = math.max(1, (alpha * numArms).toInt)
+
+    val preSelectedArms = arms.sortBy(_.getValidationResult(validationData))
+      .reverse.dropRight(numArms - numPreSelectedArms)
+
+    while (currentBudget < totalBudgets) {
+      preSelectedArms(currentBudget % numPreSelectedArms)
+        .pull(trainingData, currentBudget, Some(validationData), record = needRecord)
+      currentBudget += 1
+    }
+
+    val bestArm = preSelectedArms.maxBy(arm => arm.getValidationResult(validationData))
+    bestArm
+  }
+}
+
+/**
+ *
+ */
 class LILUCBSearch extends Search {
-  override val name = "law of iterated logarithm upper confidence bound search"
-  override def search(totalBudgets: Int, arms: Map[(String, String), Arm[_]]): Arm[_] = {
-    val numArms = arms.size
-    val armValues = arms.values.toArray
+  override def search[M <: Model[M]](
+      totalBudgets: Int,
+      arms: Array[Arm[M]],
+      trainingData: DataFrame,
+      validationData: DataFrame,
+      isLargerBetter: Boolean = true,
+      needRecord: Boolean = false): Arm[M] = {
+
+    if (!isLargerBetter) {
+      throw new UnsupportedOperationException("Unsupported OP fow now.")
+    }
+
+    val numArms = arms.length
 
     val nj = Vectors.zeros(numArms).asInstanceOf[DenseVector]
     val sumj = Vectors.zeros(numArms).asInstanceOf[DenseVector]
     for (i <- 0 until numArms) {
-      armValues(i).pull()
-      sumj.values(i) += armValues(i).getValidationResult()
+      arms(i).pull(trainingData, i, Some(validationData), record = needRecord)
+      sumj.values(i) += arms(i).getValidationResult(validationData)
       nj.values(i) += 1
     }
 
@@ -140,30 +202,42 @@ class LILUCBSearch extends Search {
 
     while (t < totalBudgets) {
       val it = Utils.argMin(ucbj)
-      armValues(it).pull()
-      sumj.values(it) += armValues(it).getValidationResult()
+      arms(it).pull(trainingData, t, Some(validationData), record = needRecord)
+      sumj.values(it) += arms(it).getValidationResult(validationData)
       nj.values(it) += 1
       ct.values(it) = 1.5 * math.sqrt(0.5 * math.log(5.0 * math.log(3.0 * nj(it)) / delta) / nj(it))
       ucbj.values(it) = sumj(it) / nj(it) - ct(it)
       t += 1
     }
 
-    val bestArm = armValues.maxBy(arm => arm.getValidationResult(recompute = false))
+    val bestArm = arms.maxBy(arm => arm.getValidationResult(validationData))
     bestArm
   }
 }
 
+/**
+ *
+ */
 class LUCBSearch extends Search {
-  override val name = "LUCB search"
-  override def search(totalBudgets: Int, arms: Map[(String, String), Arm[_]]): Arm[_] = {
-    val numArms = arms.size
-    val armValues = arms.values.toArray
+  override def search[M <: Model[M]](
+      totalBudgets: Int,
+      arms: Array[Arm[M]],
+      trainingData: DataFrame,
+      validationData: DataFrame,
+      isLargerBetter: Boolean = true,
+      needRecord: Boolean = false): Arm[M] = {
+
+    if (!isLargerBetter) {
+      throw new UnsupportedOperationException("Unsupported OP fow now.")
+    }
+
+    val numArms = arms.length
 
     val nj = Vectors.zeros(numArms).asInstanceOf[DenseVector]
     val sumj = Vectors.zeros(numArms).asInstanceOf[DenseVector]
     for (i <- 0 until numArms) {
-      armValues(i).pull()
-      sumj.values(i) += armValues(i).getValidationResult()
+      arms(i).pull(trainingData, i, Some(validationData), record = needRecord)
+      sumj.values(i) += arms(i).getValidationResult(validationData)
       nj.values(i) += 1
     }
 
@@ -194,75 +268,104 @@ class LUCBSearch extends Search {
       val inds1 = Utils.argSort(ucbj)
 
       var it = inds0(0)
-      armValues(it).pull()
-      sumj.values(it) += armValues(it).getValidationResult()
+      arms(it).pull(trainingData, t, Some(validationData), record = needRecord)
+      sumj.values(it) += arms(it).getValidationResult(validationData)
       nj.values(it) += 1
       t += 1
 
       val k1 = 1.25
       val t2nd = math.max(t * t / 4.0, 1.0)
       val t4th = t2nd * t2nd
-      var ctTmp = math.sqrt(0.5 * math.log(k1 * numArms * t4th / delta) / armValues(it).numPulls)
+      var ctTmp = math.sqrt(0.5 * math.log(k1 * numArms * t4th / delta) / arms(it).getNumPulls)
       ucbj.values(it) = sumj(it) / nj(it) - ctTmp
 
       it = if (inds1(0) == inds0(0)) inds1(1) else inds1(0)
-      armValues(it).pull()
-      sumj.values(it) += armValues(it).getValidationResult()
+      arms(it).pull(trainingData, t, Some(validationData), record = needRecord)
+      sumj.values(it) += arms(it).getValidationResult(validationData)
       nj.values(it) += 1
       t += 1
-      ctTmp = math.sqrt(0.5 * math.log(k1 * numArms * t4th / delta) / armValues(it).numPulls)
+      ctTmp = math.sqrt(0.5 * math.log(k1 * numArms * t4th / delta) / arms(it).getNumPulls)
       ucbj.values(it) = sumj(it) / nj(it) - ctTmp
     }
 
-    val bestArm = armValues.maxBy(arm => arm.getValidationResult(recompute = false))
+    val bestArm = arms.maxBy(arm => arm.getValidationResult(validationData))
     bestArm
   }
 }
 
+/**
+ *
+ */
 class SuccessiveHalvingSearch extends Search {
-  override val name = "successive halving search"
-  override def search(totalBudgets: Int, arms: Map[(String, String), Arm[_]]): Arm[_] = {
-    val numArms = arms.size
+  override def search[M <: Model[M]](
+      totalBudgets: Int,
+      arms: Array[Arm[M]],
+      trainingData: DataFrame,
+      validationData: DataFrame,
+      isLargerBetter: Boolean = true,
+      needRecord: Boolean = false): Arm[M] = {
+
+    if (!isLargerBetter) {
+      throw new UnsupportedOperationException("Unsupported OP fow now.")
+    }
+
+    val numArms = arms.length
     val numOfHalvingIter = math.ceil(Utils.log2(numArms)).toInt
 
-    var armValues = arms.values.toArray
+    var armsRef = arms
+
     var t = 0
 
-    if ((totalBudgets / (armValues.size * numOfHalvingIter)) > 0) {
+    if ((totalBudgets / (armsRef.length * numOfHalvingIter)) > 0) {
       for (_ <- 0 until numOfHalvingIter) {
-        val numOfCurrentPulling = totalBudgets / (armValues.size * numOfHalvingIter)
+        val numOfCurrentPulling = totalBudgets / (armsRef.length * numOfHalvingIter)
         var i = 0
-        while (i < armValues.size) {
+        while (i < armsRef.length) {
           for (_ <- 0 until numOfCurrentPulling) {
-            armValues(i).pull()
+            armsRef(i).pull(trainingData, t, Some(validationData), record = needRecord)
             t += 1
           }
           i += 1
         }
-        armValues = armValues.sortBy(_.getValidationResult())
-          .drop(armValues.size - math.ceil(armValues.size / 2.0).toInt)
+        armsRef = armsRef.sortBy(_.getValidationResult(validationData))
+          .drop(armsRef.length - math.ceil(armsRef.length / 2.0).toInt)
       }
     }
 
     val bestArm = if (t == totalBudgets) {
-      armValues.maxBy(arm => arm.getValidationResult(recompute = false))
+      armsRef.maxBy(arm => arm.getValidationResult(validationData))
     } else {
       while (t < totalBudgets) {
-        armValues(t % armValues.size).pull()
+        armsRef(t % armsRef.length).pull(trainingData, t, Some(validationData), record = needRecord)
         t += 1
       }
-      armValues.maxBy(arm => arm.getValidationResult())
+      armsRef.maxBy(arm => arm.getValidationResult(validationData))
     }
 
     bestArm
   }
 }
 
+/**
+ *
+ */
 class SuccessiveRejectSearch extends Search {
-  override val name = "successive reject search"
-  override def search(totalBudgets: Int, arms: Map[(String, String), Arm[_]]): Arm[_] = {
-    val numArms = arms.size
-    var armValues = arms.values.toArray
+  override def search[M <: Model[M]](
+      totalBudgets: Int,
+      arms: Array[Arm[M]],
+      trainingData: DataFrame,
+      validationData: DataFrame,
+      isLargerBetter: Boolean = true,
+      needRecord: Boolean = false): Arm[M] = {
+
+    if (!isLargerBetter) {
+      throw new UnsupportedOperationException("Unsupported OP fow now.")
+    }
+
+    val numArms = arms.length
+
+    var armsRef = arms
+
     val barLogOfNumArms = 0.5 + (2 to numArms).map(i => 1.0 / i).sum
 
     var prevNk = 0
@@ -271,87 +374,105 @@ class SuccessiveRejectSearch extends Search {
       val currNk = math.ceil((totalBudgets - numArms) / ((numArms + 1 - k) * barLogOfNumArms)).toInt
       val numOfCurrentPulling = currNk - prevNk
       var i = 0
-      while (i < armValues.size) {
+      while (i < armsRef.length) {
         for (_ <- 0 until numOfCurrentPulling) {
-          armValues(i).pull()
+          armsRef(i).pull(trainingData, t, Some(validationData), record = needRecord)
           t += 1
         }
         i += 1
       }
-      armValues = armValues.sortBy(_.getValidationResult()).drop(1)
+      armsRef = armsRef.sortBy(_.getValidationResult(validationData)).drop(1)
       prevNk = currNk
     }
 
     val bestArm = if (t == totalBudgets) {
-      armValues.maxBy(arm => arm.getValidationResult(recompute = false))
+      armsRef.maxBy(arm => arm.getValidationResult(validationData))
     } else {
       while (t < totalBudgets) {
-        armValues(t % armValues.size).pull()
+        armsRef(t % armsRef.length).pull(trainingData, t, Some(validationData), record = needRecord)
         t += 1
       }
-      armValues.maxBy(arm => arm.getValidationResult())
+      armsRef.maxBy(arm => arm.getValidationResult(validationData))
     }
 
     bestArm
   }
 }
 
+/**
+ *
+ */
 class SuccessiveEliminationSearch extends Search {
-  override val name = "successive elimination search"
-  override def search(totalBudgets: Int, arms: Map[(String, String), Arm[_]]): Arm[_] = {
-    val numArms = arms.size
-    val delta = 0.1
-    var armValues = arms.values.toArray
+  override def search[M <: Model[M]](
+      totalBudgets: Int,
+      arms: Array[Arm[M]],
+      trainingData: DataFrame,
+      validationData: DataFrame,
+      isLargerBetter: Boolean = true,
+      needRecord: Boolean = false): Arm[M] = {
 
-    armValues.foreach(_.pull())
+    if (!isLargerBetter) {
+      throw new UnsupportedOperationException("Unsupported OP fow now.")
+    }
+
+    val numArms = arms.length
+    val delta = 0.1
+
+    var armsRef = arms
+
+    armsRef.zipWithIndex.foreach { case (arm, idx) =>
+      arm.pull(trainingData, idx, Some(validationData), record = needRecord)
+    }
     var t = numArms
 
-    val maxArmValidationResult = armValues.map(_.getValidationResult()).max
+    val maxArmValidationResult = armsRef.map(_.getValidationResult(validationData)).max
     val ct = math.sqrt(0.5
-      * math.log(4.0 * numArms * armValues(0).numPulls * armValues(0).numPulls / delta)
-      / armValues(0).numPulls)
-    val armValuesBuilder = new ArrayBuffer[Arm[_]]()
+      * math.log(4.0 * numArms * armsRef(0).getNumPulls * armsRef(0).getNumPulls / delta)
+      / armsRef(0).getNumPulls)
+    val armValuesBuilder = new ArrayBuffer[Arm[M]]()
     var i = 0
-    while (i < armValues.size) {
-      if (maxArmValidationResult - armValues(i).getValidationResult(recompute = false) < ct) {
-        armValuesBuilder += armValues(i)
+    while (i < armsRef.length) {
+      if (maxArmValidationResult - armsRef(i).getValidationResult(validationData) < ct) {
+        armValuesBuilder += armsRef(i)
       }
       i += 1
     }
-    armValues = armValuesBuilder.toArray
+    armsRef = armValuesBuilder.toArray
 
     while (2 * t <= totalBudgets) {
       val numIter = t
       for (i <- 0 until numIter) {
-        armValues(i % armValues.size).pull()
+        armsRef(i % armsRef.length).pull(trainingData, t, Some(validationData), record = needRecord)
         t += 1
       }
 
-      val maxArmValidationResult = armValues.map(_.getValidationResult()).max
+      val maxArmValidationResult = armsRef.map(_.getValidationResult(validationData)).max
       val ct = math.sqrt(0.5
-        * math.log(4.0 * numArms * armValues(0).numPulls * armValues(0).numPulls / delta)
-        / armValues(0).numPulls)
-      val armValuesBuilder = new ArrayBuffer[Arm[_]]()
+        * math.log(4.0 * numArms * armsRef(0).getNumPulls * armsRef(0).getNumPulls / delta)
+        / armsRef(0).getNumPulls)
+      val armValuesBuilder = new ArrayBuffer[Arm[M]]()
       var i = 0
-      while (i < armValues.size) {
-        if (maxArmValidationResult - armValues(i).getValidationResult(recompute = false) < ct) {
-          armValuesBuilder += armValues(i)
+      while (i < armsRef.length) {
+        if (maxArmValidationResult - armsRef(i).getValidationResult(validationData) < ct) {
+          armValuesBuilder += armsRef(i)
         }
         i += 1
       }
-      armValues = armValuesBuilder.toArray
+      armsRef = armValuesBuilder.toArray
     }
 
     val bestArm = if (t == totalBudgets) {
-      armValues.maxBy(arm => arm.getValidationResult(recompute = false))
+      armsRef.maxBy(arm => arm.getValidationResult(validationData))
     } else {
       while (t < totalBudgets) {
-        armValues(t % armValues.size).pull()
+        armsRef(t % armsRef.length).pull(trainingData, t, Some(validationData), record = needRecord)
         t += 1
       }
-      armValues.maxBy(arm => arm.getValidationResult())
+      armsRef.maxBy(arm => arm.getValidationResult(validationData))
     }
 
     bestArm
   }
 }
+*/
+

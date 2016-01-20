@@ -17,220 +17,228 @@
 
 package org.apache.spark.ml.tuning.bandit
 
+import scala.collection.mutable.ArrayBuffer
+
 import org.apache.spark.Logging
 import org.apache.spark.annotation.Experimental
-import org.apache.spark.ml.param.shared.{HasMaxIter, HasSeed}
-import org.apache.spark.ml.param.{IntParam, Param, ParamMap, Params, _}
+import org.apache.spark.ml.evaluation.Evaluator
+import org.apache.spark.ml.param.shared.HasMaxIter
+import org.apache.spark.ml.param.{IntParam, Param, ParamMap, _}
+import org.apache.spark.ml.tuning.ValidatorParams
 import org.apache.spark.ml.util.Identifiable
 import org.apache.spark.ml.{Estimator, Model}
+import org.apache.spark.mllib.util.MLUtils
+import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{DataFrame, SQLContext}
 
 /**
  * Params for [[BanditValidator]] and [[BanditValidatorModel]].
  */
-trait BanditValidatorParams extends Params with HasStepsPerPulling with HasSeed with HasMaxIter {
-
+trait BanditValidatorParams extends ValidatorParams with HasMaxIter {
   /**
-   *  Parameter to define problem type.
-   *
-   *  @group param
-   */
-  val problemType: Param[String] = new Param(this, "problemType", "types of problems")
-  setDefault(problemType, "CLASSIFY")
-
-  /** @group getParam */
-  def getProblemType: String = $(problemType)
-
-  /**
-   * Specify whether to keep compute history or not.
-   *
+   * Step control for one pulling of an arm.
    * @group param
    */
-  val computeHistory: BooleanParam = new BooleanParam(this, "computeHistory",
-    "whether to compute history or not")
-  setDefault(computeHistory, true)
+  val stepsPerPulling: IntParam =
+    new IntParam(this, "stepsPerPulling", "the count of iterative steps in one pulling")
 
   /** @group getParam */
-  def getComputeHistory: Boolean = $(computeHistory)
+  def getStepsPerPulling: Int = $(stepsPerPulling)
 
   /**
-   * Baselines for each dataset.
-   *
+   * Param for number of folds for cross validation.  Must be >= 2.
+   * Default: 3
    * @group param
    */
-  val baselines: Param[Map[String, Double]] = new Param(this, "baselines",
-    "baseline of each dataset")
+  val numFolds: IntParam = new IntParam(this, "numFolds",
+    "number of folds for cross validation (>= 2)", ParamValidators.gtEq(2))
 
   /** @group getParam */
-  def getBaselines: Map[String, Double] = $(baselines)
+  def getNumFolds: Int = $(numFolds)
 
   /**
-   * Parameters to specify an array of model families.
-   *
+   * Multi-arm bandit search strategy to be used in the validator. All strategies are listed in
+   * [[Search]]. Different strategy has different behavior when it pulling arms.
    * @group param
    */
-  val armFactories: Param[Array[ArmFactory]] = new Param(this, "armFactories", "arm factories")
+  val searchStrategy: Param[Search] =
+    new Param(this, "searchStrategy", "search strategy to pull arms")
 
   /** @group getParam */
-  def getArmFactories: Array[ArmFactory] = $(armFactories)
+  def getSearchStrategy: Search = $(searchStrategy)
 
-  /**
-   * Number of trails to conduct the experiment.
-   *
-   * @group param
-   */
-  val numTrails: IntParam = new IntParam(this, "numTrails", "number of trails")
-
-  /** @group getParam */
-  def getNumTrails: Int = $(numTrails)
-
-  /**
-   * The data name and file name of each dataset.
-   *
-   * @group param
-   */
-  val datasets: Param[Map[String, String]] = new Param(this, "datasets", "datasets to use")
-
-  /** @group getParam */
-  def getDatasets: Map[String, String] = $(datasets)
-
-  /**
-   * A list of numbers of arms per parameter.
-   *
-   * @group param
-   */
-  val numArmsList: Param[Array[Int]] = new Param(this, "numArmsList",
-    "a list of numbers of arms per parameter")
-
-  /** @group getParam */
-  def getNumArmsList: Array[Int] = $(numArmsList)
-
-  /**
-   * A list of expected iterations for each arm.
-   *
-   * @group param
-   */
-  val expectedIters: Param[Array[Int]] = new Param(this, "expectedIters", "expected iterations")
-
-  /** @group getParam */
-  def getExpectedIters: Array[Int] = $(expectedIters)
-
-  /**
-   * An array of search strategies to use.
-   *
-   * @group param
-   */
-  val searchStrategies: Param[Array[Search]] = new Param(this, "searchStrategies", "")
-
-  /** @group getParam */
-  def getSearchStrategies: Array[Search] = $(searchStrategies)
-
-  setDefault(maxIter -> math.pow(2, 6).toInt)
+  setDefault(maxIter -> math.pow(2, 6).toInt, stepsPerPulling -> 1, numFolds -> 3)
 }
 
 /**
  * :: Experimental ::
- * K-fold cross validation.
+ * Multi-arm bandit hyper-parameters selection.
  */
 @Experimental
 class BanditValidator(override val uid: String)
   extends Estimator[BanditValidatorModel] with BanditValidatorParams with Logging {
 
-  def this() = this(Identifiable.randomUID("bandit validation"))
+  def this() = this(Identifiable.randomUID("BanditValidator"))
 
-  // TODO
   def transformSchema(schema: StructType): StructType = {
-    schema
+    $(estimator).transformSchema(schema)
   }
 
-  // TODO
-  def copy(extra: ParamMap): BanditValidator = ???
+  def copy(extra: ParamMap): BanditValidator = {
+    val copied = defaultCopy(extra).asInstanceOf[BanditValidator]
+    if (copied.isDefined(estimator)) {
+      copied.setEstimator(
+        copied.getEstimator.copy(extra).asInstanceOf[Estimator[_] with Controllable])
+    }
+    if (copied.isDefined(evaluator)) {
+      copied.setEvaluator(copied.getEvaluator.copy(extra))
+    }
+    copied
+  }
 
   /** @group setParam */
-  def setProblemType(value: String): this.type = set(problemType, value)
+  def setEstimator(value: Estimator[_] with Controllable): this.type = set(estimator, value)
 
   /** @group setParam */
-  def setComputeHistory(value: Boolean): this.type = set(computeHistory, value)
+  def setEstimatorParamMaps(value: Array[ParamMap]): this.type = set(estimatorParamMaps, value)
 
   /** @group setParam */
-  def setBaselines(value: Map[String, Double]): this.type = set(baselines, value)
+  def setEvaluator(value: Evaluator): this.type = set(evaluator, value)
 
   /** @group setParam */
-  def setArmFactories(value: Array[ArmFactory]): this.type = set(armFactories, value)
+  def setNumFolds(value: Int): this.type = set(numFolds, value)
 
   /** @group setParam */
-  def setNumTrails(value: Int): this.type = set(numTrails, value)
-
-  /** @group setParam */
-  def setDatasets(value: Map[String, String]): this.type = set(datasets, value)
-
-  /** @group setParam */
-  def setNumArmsList(value: Array[Int]): this.type = set(numArmsList, value)
-
-  /** @group setParam */
-  def setExpectedIters(value: Array[Int]): this.type = set(expectedIters, value)
-
-  /** @group setParam */
-  def setSearchStrategies(value: Array[Search]): this.type = set(searchStrategies, value)
+  def setSearchStrategy(value: Search): this.type = set(searchStrategy, value)
 
   /** @group setParam */
   def setStepsPerPulling(value: Int): this.type = set(stepsPerPulling, value)
 
   /** @group setParam */
-  def setSeed(value: Long): this.type = set(seed, value)
-
-  /** @group setParam */
   def setMaxIter(value: Int): this.type = set(maxIter, value)
 
-  override def fit(dataset: DataFrame): BanditValidatorModel =
-    throw new UnsupportedOperationException
+  /**
+   * Aggregate all results in the summary variable. We record behaviors of every arm in the whole
+   * validation process. So there are `$(estimatorParamMaps).length * $(numFolds)` arms in total.
+   * Each arm records a `Tuple3` of "iteration", "evaluation result on training set", and
+   * "evaluation result on validation test".
+   */
+  private var trainingSummary: Option[Array[Array[(Int, Double, Double)]]] = None
 
-  def fit(sqlCtx: SQLContext) = {
-    val results = $(datasets).flatMap { case (dataName, fileName) =>
-      val data = ClassifyDataset.scaleAndPartitionData(sqlCtx, dataName, fileName)
-
-      /*
-      val allArms = Arms.generateArms($(armFactories), data, $(numArmsList).max).mapValues { arm =>
-        arm.history.doCompute = $(computeHistory)
-        arm
-      }
-      */
-
-      // val armsAllocator = new ArmsAllocator(allArms)
-
-      /*
-      if ($(computeHistory)) {
-        for ((armInfo, arm) <- allArms) {
-          arm.train($(maxIter))
-          println(armInfo)
-          println(arm.history.iterations.mkString(", "))
-          println(arm.history.errors.mkString(", "))
-        }
-      }
-      */
-
-      $(numArmsList).flatMap { case numArmsPerParameter =>
-        val numArms = $(armFactories)
-          .map(modelFamily => math.pow(numArmsPerParameter, modelFamily.paramList.size)).sum.toInt
-        $(expectedIters).zipWithIndex.flatMap { case (expectedNumItersPerArm, idx) =>
-          $(searchStrategies).map { case searchStrategy =>
-            val arms = Arms.generateArms($(armFactories), data, numArms).mapValues { arm =>
-              arm.history.doCompute = $(computeHistory)
-              arm
-            }
-            // val arms = armsAllocator.allocate(numArms)
-            val bestArm = searchStrategy.search(expectedNumItersPerArm * numArms, arms)
-            ((searchStrategy.name, dataName, numArms, expectedNumItersPerArm),
-              bestArm.getResults())
+  /**
+   * Re-organize the training summary into a readable format, for output to read by humans.
+   */
+  def readableSummary(): Array[String] = {
+    val resultBuilder = new ArrayBuffer[String]()
+    val sepStr = Array.fill(100)("=").mkString("")
+    trainingSummary match {
+      case None =>
+        val error = "No summary recorded!"
+        resultBuilder.append(error)
+        println(error)
+      case Some(x) =>
+        var i = 0
+        while (i < $(numFolds)) {
+          var j = 0
+          while (j < $(estimatorParamMaps).length) {
+            val hint = s"For #${i}-fold training, #${j}-arm, we get"
+            resultBuilder.append(hint)
+            val history = s"\t${x(i * $(estimatorParamMaps).length + j).mkString(", ")}"
+            resultBuilder.append(history)
+            j += 1
           }
+          resultBuilder.append(sepStr)
+          i += 1
         }
-      }
     }
-    results
+    resultBuilder.toArray
+  }
+
+  /**
+   * Re-organize the training summary into a paintable format, for drawing pictures to compare
+   * between each search strategy.
+   * @return [ #fold, [ #iteration, #arm, trainingResult, validationResult ] ]
+   */
+  def paintableSummary(): Array[(Int, Array[(Int, Int, Double, Double)])] = {
+    val numArms = $(estimatorParamMaps).length
+    trainingSummary match {
+      case None =>
+        throw new NullPointerException("The value trainingSummary is None.")
+      case Some(x) =>
+        (0 until $(numFolds)).toArray.map { i =>
+          val retVal = x.slice(i * numArms, (i + 1) * numArms).zipWithIndex.flatMap {
+            case (armResult, armIdx) =>
+              armResult.map { case (iter, trainingResult, validationResult) =>
+                (iter, armIdx, trainingResult, validationResult)
+              }
+          }.sortBy(_._1)
+          (i, retVal)
+        }
+    }
+  }
+
+  override def fit(dataset: DataFrame): BanditValidatorModel = {
+    assert($(estimator).isInstanceOf[Controllable],
+      s"Estimator ${$(estimator).getClass.getSimpleName} is not controllable.")
+
+    val schema = dataset.schema
+    transformSchema(schema, logging = true)
+    val sqlCtx = dataset.sqlContext
+    // Get all parameters first
+    val est = $(estimator)
+    val eval = $(evaluator)
+    val epm = $(estimatorParamMaps)
+
+    // Split data into k-fold
+    val splits = MLUtils.kFold(dataset.rdd, $(numFolds), 0)
+
+    val totalBudget = if ($(maxIter) > 2 * epm.length) {
+      $(maxIter)
+    } else {
+      logInfo("The `maxIter` should be larger than `2 * arms size`.")
+      2 * epm.length + 1
+    }
+
+    // Find the best arm with k-fold bandit validation
+    val bestArms = splits.zipWithIndex.map { case ((training, validation), splitIndex) =>
+      val trainingDataset = sqlCtx.createDataFrame(training, schema).cache()
+      val validationDataset = sqlCtx.createDataFrame(validation, schema).cache()
+      logDebug(s"Train split $splitIndex with multiple sets of parameters.")
+
+      // For each parameter map, create a corresponding arm
+      val arms = epm.map(
+        new Arm(
+          est.asInstanceOf[Estimator[_] with Controllable], None, _, eval, $(stepsPerPulling)
+        )
+      )
+
+      // Find the best arm with pre-defined search strategies
+      val bestArm = $(searchStrategy).search(totalBudget, arms, trainingDataset, validationDataset,
+        eval.isLargerBetter, needRecord = true)
+
+      arms.zipWithIndex.foreach { case (arm, idx) =>
+        if (trainingSummary.isEmpty) {
+          trainingSummary = Some(Array.ofDim($(estimatorParamMaps).length * $(numFolds)))
+        }
+        trainingSummary.get(splitIndex * arms.length + idx) = arm.getHistory
+      }
+
+      (bestArm, bestArm.getValidationResult(validationDataset))
+    }
+
+    val bestArm = bestArms.minBy(_._2)._1
+    val bestModel = bestArm.getModel
+
+    copyValues(new BanditValidatorModel(uid, bestModel).setParent(this))
   }
 }
 
+/**
+ * :: Experimental ::
+ * Model from multi-arm bandit validation.
+ *
+ * @param bestModel The best model selected from multi-arm bandit validation.
+ */
 class BanditValidatorModel private[ml] (
     override val uid: String,
     val bestModel: Model[_])
@@ -252,6 +260,87 @@ class BanditValidatorModel private[ml] (
   override def copy(extra: ParamMap): BanditValidatorModel = {
     val copied = new BanditValidatorModel(uid, bestModel.copy(extra).asInstanceOf[Model[_]])
     copyValues(copied, extra)
+  }
+}
+
+/**
+ * Multi-bandit arm for hyper-parameter selection. An arm is a composition of an estimator, a model
+ * and an evaluator. Pulling an arm means performs a single iterative step for the estimator, which
+ * consumes a current model and produce a new one. The evaluator computes the error given a target
+ * column and a predicted column.
+ */
+class Arm(
+    val estimator: Estimator[_] with Controllable,
+    val initialModel: Option[Model[_]],
+    val estimatorParamMap: ParamMap,
+    val evaluator: Evaluator,
+    val stepsPerPulling: Int) {
+
+  /**
+   * Perf-test variable to record arm pulling history. `Int` in the beginning stands for the time
+   * to pull this arm. The last two `Double`s to record evaluation result on training set and
+   * validation set.
+   * Since it's very costly to record these two results every time the code iterating, it will not
+   * be computed in production code.
+   */
+  private val history = new ArrayBuffer[(Int, Double, Double)]()
+
+  def setHistory(iter: Int, evalOnTrainingSet: Double, evalOnValidationSet: Double): this.type = {
+    history.append((iter, evalOnTrainingSet, evalOnValidationSet))
+    this
+  }
+
+  def getHistory: Array[(Int, Double, Double)] = history.toArray
+
+  /**
+   * Inner model to record intermediate training result.
+   */
+  private var model: Option[Model[_]] = None
+
+  def getModel: Model[_] = model.get
+
+  /**
+   * Keep record of the number of pulls for computations in some search strategies.
+   */
+  private var numPulls: Int = 0
+
+  def getNumPulls: Int = numPulls
+
+  /**
+   * Pull the arm to perform maxIter steps of the iterative [Estimator]. Model will be updated
+   * after the pulling.
+   */
+  def pull(
+      dataset: DataFrame,
+      iter: Int,
+      validationSet: Option[DataFrame] = None,
+      record: Boolean = false): this.type = {
+    this.numPulls += 1
+    if (model.isEmpty && initialModel.isDefined) {
+      this.model = initialModel
+    }
+    estimator.set(estimator.initialModel, model)
+    estimator.set(estimator.maxIter, stepsPerPulling)
+    this.model = Some(estimator.fit(dataset, estimatorParamMap)).asInstanceOf[Option[Model[_]]]
+    if (record) {
+      val validationResult = validationSet match {
+        case Some(data) => evaluator.evaluate(model.get.transform(data))
+        case None => Double.NaN
+      }
+      setHistory(iter, evaluator.evaluate(model.get.transform(dataset)), validationResult)
+    }
+    this
+  }
+
+  /**
+   * Evaluate the model according to a validation dataset.
+   */
+  def getValidationResult(validationSet: DataFrame): Double = {
+    if (model.isEmpty) {
+      throw new Exception("model is empty")
+    } else {
+      evaluator.evaluate(model.get.transform(validationSet))
+    }
   }
 }
 

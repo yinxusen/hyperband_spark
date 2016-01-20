@@ -17,23 +17,14 @@
 
 package org.apache.spark.ml.tuning.bandit
 
-import org.apache.spark.mllib.linalg.{BLAS, Vectors}
-import org.scalatest.FunSuite
-
 import scala.util.Random
 
-class UtilsSuite extends FunSuite with BanditTestContext {
-  test("Test dataset splitting") {
-    val dataset = sc.parallelize(Array.range(0, 10))
-    val (train, test) = Utils.splitTrainTest(dataset, 0.3, Random.nextInt())
-    val localTrain = train.collect()
-    val localTest = test.collect()
-    for (x <- localTest) {
-      assert(!localTrain.contains(x), "Element overlaps between training and test set.")
-    }
-    assert(localTest.size + localTrain.size == 10, "Element misses after splitting.")
-  }
+import org.scalatest.FunSuite
 
+import org.apache.spark.mllib.linalg.{BLAS, Vectors}
+import org.apache.spark.mllib.util.MLlibTestSparkContext
+
+class UtilsSuite extends FunSuite with MLlibTestSparkContext {
   test("Randomly choose one") {
     val dist = (0 until 100).toArray.map(_ => Random.nextDouble())
     val selected = sc.parallelize(0 until 1000000).map(_ => Utils.chooseOne(Vectors.dense(dist)))
@@ -43,7 +34,7 @@ class UtilsSuite extends FunSuite with BanditTestContext {
     val selectedHistogram = selected.map(x => (x, 1)).reduceByKey(_ + _).collect()
       .sortBy(_._2).reverse
     val distWithIndex = dist.zipWithIndex.map(x => (x._2, x._1)).sortBy(_._2).reverse
-      .dropRight(dist.size - selectedHistogram.size)
+      .dropRight(dist.length - selectedHistogram.length)
 
     for (key <- selectedHistogram.map(_._1)) {
       assert(key < 100, s"Selected element $key beyond scope.")

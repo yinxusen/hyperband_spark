@@ -17,25 +17,27 @@
 
 package org.apache.spark.ml.tuning.bandit
 
-import org.apache.spark.ml.param.ParamMap
-import org.apache.spark.ml.{Estimator, Model}
-import org.apache.spark.sql.DataFrame
+import org.apache.spark.ml.Model
+import org.apache.spark.ml.param.shared.HasMaxIter
+import org.apache.spark.ml.param.{Param, _}
 
 /**
- * Partial estimator performs a single iterative step in each fitting.
+ * Params for Controllable Estimators.
  */
-abstract class PartialEstimator[M <: Model[M]]
-  extends Estimator[M] with HasDownSamplingFactor with HasStepsPerPulling {
+trait Controllable extends Params with HasMaxIter {
 
-  def fit(dataset: DataFrame, initModel: M): M
+  /**
+   * Param for the initial model of a given estimator. Default None.
+   * @group param
+   */
+  val initialModel: Param[Option[Model[_]]] =
+    new Param(this, "initialModel", "initial model for warm-start")
 
-  def fit(dataset: DataFrame, initModel: M, paramMap: ParamMap): M = {
-    copy(paramMap).fit(dataset, initModel)
-  }
+  /** @group getParam */
+  def getInitialModel: Option[Model[_]] = $(initialModel)
 
-  def fit(dataset: DataFrame, initModel: M, paramMaps: Array[ParamMap]): Seq[M] = {
-    paramMaps.map(fit(dataset, initModel, _))
-  }
-
-  override def copy(extra: ParamMap): PartialEstimator[M]
+  setDefault(initialModel -> None, maxIter -> 1)
 }
+
+
+

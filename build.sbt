@@ -11,9 +11,9 @@ resolvers ++= Seq(
 )
 
 libraryDependencies ++= Seq(
-  "org.apache.spark" %% "spark-core"    % "1.4.1",
-  "org.apache.spark" %% "spark-mllib"   % "1.4.1",
-  "org.apache.spark" %% "spark-graphx" % "1.4.1",
-  "org.apache.spark" %% "spark-sql" % "1.4.1",
+  "org.apache.spark" %% "spark-core"    % "1.6.0",
+  "org.apache.spark" %% "spark-mllib"   % "1.6.0",
+  "org.apache.spark" %% "spark-graphx" % "1.6.0",
+  "org.apache.spark" %% "spark-sql" % "1.6.0",
   "org.scalatest" %% "scalatest" % "2.2.1" % "test"
 )

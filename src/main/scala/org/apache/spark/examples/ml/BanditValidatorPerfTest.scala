@@ -1,34 +1,18 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.apache.spark.examples.ml
 
-import org.apache.spark.ml.classification.{LogisticRegression, LogisticRegressionModel}
+import org.apache.spark.ml.classification.LogisticRegression
 import org.apache.spark.ml.evaluation.BinaryClassificationEvaluator
 import org.apache.spark.ml.tuning.ParamGridBuilder
-import org.apache.spark.ml.tuning.bandit._
-import org.apache.spark.mllib.linalg.{Vectors, Vector}
+import org.apache.spark.ml.tuning.bandit.{BanditValidator, ExponentialWeightsSearch, StaticSearch}
+import org.apache.spark.mllib.linalg.Vector
 import org.apache.spark.mllib.regression.LabeledPoint
 import org.apache.spark.mllib.util.MLUtils
-import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
-import org.apache.spark.storage.StorageLevel
 import org.apache.spark.{SparkConf, SparkContext}
 
+/**
+  * Created by panda on 1/21/16.
+  */
 object BanditValidatorPerfTest {
   def main(args: Array[String]): Unit = {
     val conf = new SparkConf().setMaster("local[8]").setAppName("BanditPerfTest")
@@ -97,54 +81,5 @@ object BanditValidatorPerfTest {
       }
     }
     sc.stop()
-  }
-}
-
-object Utils {
-  def loadLibSVMFile(
-      sc: SparkContext,
-      path: String,
-      numFeatures: Int,
-      minPartitions: Int): RDD[LabeledPoint] = {
-    val parsed = sc.textFile(path, minPartitions)
-      .map(_.trim)
-      .filter(line => !(line.isEmpty || line.startsWith("#")))
-      .map { line =>
-        val items = line.split(' ')
-        val label = items.head.toDouble
-        val (indices, values) = items.tail.filter(_.nonEmpty).map { item =>
-          val indexAndValue = item.split(':')
-          val index = indexAndValue(0).toInt
-          val value = indexAndValue(1).toDouble
-          (index, value)
-        }.unzip
-
-        // check if indices are one-based and in ascending order
-        var previous = -1
-        var i = 0
-        val indicesLength = indices.length
-        while (i < indicesLength) {
-          val current = indices(i)
-          require(current > previous, "indices should be one-based and in ascending order" )
-          previous = current
-          i += 1
-        }
-
-        (label, indices.toArray, values.toArray)
-      }
-
-    // Determine number of features.
-    val d = if (numFeatures > 0) {
-      numFeatures
-    } else {
-      parsed.persist(StorageLevel.MEMORY_ONLY)
-      parsed.map { case (label, indices, values) =>
-        indices.lastOption.getOrElse(0)
-      }.reduce(math.max) + 1
-    }
-
-    parsed.map { case (label, indices, values) =>
-      LabeledPoint(label, Vectors.sparse(d, indices, values))
-    }
   }
 }

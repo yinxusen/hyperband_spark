@@ -21,15 +21,16 @@ import scala.util.Random
 
 import org.scalatest.FunSuite
 
+import org.apache.spark.{SparkContext, SparkConf}
 import org.apache.spark.mllib.linalg.{BLAS, Vectors}
-import org.apache.spark.mllib.util.MLlibTestSparkContext
 
-class UtilsSuite extends FunSuite with MLlibTestSparkContext {
+class UtilsSuite extends FunSuite {
   test("Randomly choose one") {
+    val conf = new SparkConf().setAppName("test")
+    val sc = new SparkContext(conf)
+
     val dist = (0 until 100).toArray.map(_ => Random.nextDouble())
     val selected = sc.parallelize(0 until 1000000).map(_ => Utils.chooseOne(Vectors.dense(dist)))
-
-
 
     val selectedHistogram = selected.map(x => (x, 1)).reduceByKey(_ + _).collect()
       .sortBy(_._2).reverse
@@ -53,6 +54,5 @@ class UtilsSuite extends FunSuite with MLlibTestSparkContext {
 
     assert(currentMissMatch / totalMissMatch < 0.5,
       "Selected elements miss match with original array.")
-
   }
 }
